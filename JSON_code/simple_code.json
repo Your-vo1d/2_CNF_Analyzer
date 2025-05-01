@@ -1,0 +1,162 @@
+{
+    "code":
+    {
+        "rows":
+        [
+            {
+                "id": 56,
+                "variable": "root",
+                "value": null
+            },
+            {
+                "id": 57,
+                "variable":"root",
+                "value": "malloc"
+            },
+            {
+                "id": 59,
+                "variable":"root",
+                "field":
+                {
+                    "f": "left",
+                    "value": null
+                }
+            },
+            {
+                "id": 60,
+                "variable":"root",
+                "field":
+                {
+                    "f": "right",
+                    "value": null
+                }
+            },
+            {
+                "id": 63,
+                "variable":"root",
+                "field":
+                {
+                    "f": "left",
+                    "value": "malloc"
+                }
+            },
+            {
+                "id": 65,
+                "variable":"root",
+                "field":
+                {
+                    "f": "left",
+                    "op":
+                    {
+                        "f":"left",
+                        "value": null
+                    }
+                }
+            },
+            {
+                "id": 66,
+                "variable":"root",
+                "field":
+                {
+                    "f": "left",
+                    "op":
+                    {
+                        "f":"right",
+                        "value": null
+                    }
+                }
+            },
+            {
+                "id": 69,
+                "variable":"root",
+                "field":
+                {
+                    "f": "right",
+                    "value": "malloc"
+                }
+            },
+            {
+                "id": 71,
+                "variable":"root",
+                "field":
+                {
+                    "f": "right",
+                    "op":
+                    {
+                        "f":"left",
+                        "value":
+                        {
+                            "variable":"root",
+                            "field":
+                            {
+                                "f":"left"
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "id": 72,
+                "variable":"root",
+                "field":
+                {
+                    "f": "right",
+                    "op":
+                    {
+                        "f": "right",
+                        "value":
+                        {
+                            "variable":"root",
+                            "field":
+                            {
+                                "f":"right"
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "id":77,
+                "operation":
+                {
+                    "op": "if",
+                    "branch true":
+                    {
+                        "body": "empty"
+                    }
+                }
+            },
+            {
+                "id": 86,
+                "variable":"current",
+                "value":
+                {
+                    "variable":"root"
+                }
+            },
+            {
+                "id":87,
+                "operation":
+                {
+                    "op": "if",
+                    "branch true":
+                    {
+                        "body":
+                        {
+                            "id": 90,
+                            "variable":"current",
+                            "value":
+                            {
+                                "variable":"current",
+                                "field":
+                                {
+                                    "f":"left"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}
