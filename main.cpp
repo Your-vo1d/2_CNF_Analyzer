@@ -2,12 +2,14 @@
 #include <QCommandLineParser>
 #include <QHash>
 #include "Parser_JSON.h"
+#include "CNFClause.h"
+#include <QVariant>
 
 int main(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
     QCommandLineParser parser;
-    parser.setApplicationDescription("JSON Field Parser");
+    parser.setApplicationDescription("Memory-Aware JSON Parser");
     parser.addHelpOption();
     parser.addPositionalArgument("file", "Input JSON file");
     parser.process(app);
@@ -17,24 +19,44 @@ int main(int argc, char *argv[]) {
         qCritical() << "Error: No input file specified";
         return 1;
     }
+    QHash<QString, QHash<QString, QVariant>> elements;
+    bool error = false;
+    CNFClause cnf;
 
-    QHash<int, QString> elements;
-    QString errorMessage;
+    //parseJsonFile(args.first(), elements, error, cnf);
+    BoolVector pos1(16);
+    BoolVector neg1(16);
+    pos1.setBit(0);  // 10000000 00000000
+    neg1.setBit(1);  // 01000000 00000000
 
-    parseJsonFile(args.first(), elements, errorMessage);
+    // Создаем клаузу 2: (x3 ∨ ¬x1)
+    BoolVector pos2(16);
+    BoolVector neg2(16);
+    pos2.setBit(1);  // 00010000 00000000
+    neg2.setBit(0);  // 01000000 00000000
 
-    if (!errorMessage.isEmpty()) {
-        qCritical() << "Error:" << errorMessage;
+    // Создаем связанный список клауз
+    CNFClause* clause1 = new CNFClause();
+    clause1->positiveVars = pos1;
+    clause1->negativeVars = neg1;
+    clause1->print();
+    CNFClause* clause2 = new CNFClause();
+    clause2->positiveVars = pos2;
+    clause2->negativeVars = neg2;
+    clause2->print();
+    clause1->next = clause2;
+    clause2->next = nullptr;
+
+    // Решаем КНФ
+    solveCNF(clause1,2);
+    if (error) {
+        qCritical() << "Error:";
         return 1;
     }
 
-    qDebug() << "\nFinal elements list (sorted by position):";
-    QList<int> positions = elements.keys();
-    std::sort(positions.begin(), positions.end());
+    //qDebug() << "\nFinal elements:";
+    //printElements(elements);
 
-    for (int pos : positions) {
-        qDebug() << pos << ":" << elements[pos];
-    }
-
+    cnf.print();
     return 0;
 }
