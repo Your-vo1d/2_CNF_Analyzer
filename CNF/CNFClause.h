@@ -9,7 +9,8 @@ public:
     BoolVector negativeVars;
     CNFClause* next;
 
-    CNFClause(const char* posStr = nullptr, const char* negStr = nullptr);
+    CNFClause();
+    CNFClause(const char* posStr, const char* negStr);
     ~CNFClause();
     
     void print() const;
@@ -19,6 +20,8 @@ public:
     void clearPositiveBit(size_t position);
     void setNegativeBit(size_t position);
     void clearNegativeBit(size_t position);
+
+    void addClause(const CNFClause& newClause);
 };
 
 #endif // CNFCLAUSE_H

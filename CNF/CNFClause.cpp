@@ -1,6 +1,15 @@
 #include "CNFClause.h"
 #include <stdio.h>
 
+// Конструктор по умолчанию
+CNFClause::CNFClause()
+    : positiveVars(),  // Явный вызов конструктора по умолчанию BoolVector
+    negativeVars(),  // Явный вызов конструктора по умолчанию BoolVector
+    next(nullptr)    // Инициализация указателя как nullptr
+{
+}
+
+
 CNFClause::CNFClause(const char* posStr, const char* negStr) 
     : positiveVars(posStr), negativeVars(negStr), next(nullptr) {}
 

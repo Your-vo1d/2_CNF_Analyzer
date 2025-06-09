@@ -9,6 +9,17 @@ size_t BoolVector::calculateBytes(size_t bits) const {
 
 BoolVector::BoolVector() : vector(nullptr), bits(0), bytes(0) {}
 
+BoolVector::BoolVector(size_t input_bits) {
+    bits = input_bits;
+    bytes = calculateBytes(bits);
+    vector = (unsigned char*)malloc(bytes);
+
+    if (vector) {
+        for (size_t i = 0; i < bytes; i++)
+            vector[i] = 0;
+    }
+}
+
 BoolVector::BoolVector(const char* str) : vector(nullptr), bits(0), bytes(0) {
     if (str) {
         bits = strlen(str);
