@@ -9,7 +9,7 @@
 void parseJsonFile(const QString& filePath,
                    QHash<QString, QHash<QString, QVariant>>& elements, bool& error, CNFClause& cnf);
 
-void printElements(QHash<QString, QHash<QString, QVariant>>& elements);
+void printElements(const QHash<QString, QHash<QString, QVariant>>& elements);
 void processBody(const QJsonValue& bodyValue, bool& error,
                  QHash<QString, QHash<QString, QVariant>>& elements,
                  int& currentPosition, int& index_memory_var,
