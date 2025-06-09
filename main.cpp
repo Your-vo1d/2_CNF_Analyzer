@@ -4,7 +4,7 @@
 #include "Parser_JSON.h"
 #include "CNFClause.h"
 #include <QVariant>
-
+#include <iostream>
 int main(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
@@ -23,7 +23,11 @@ int main(int argc, char *argv[]) {
     bool error = false;
     CNFClause cnf;
 
-    //parseJsonFile(args.first(), elements, error, cnf);
+    parseJsonFile(args.first(), elements, error, cnf);
+    qDebug() << "\nFinal elements:";
+    printElements(elements);
+    cnf.print();
+    std::cout << "-----------------------" <<std::endl;
     BoolVector pos1(16);
     BoolVector neg1(16);
     pos1.setBit(0);  // 10000000 00000000
@@ -54,9 +58,5 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    //qDebug() << "\nFinal elements:";
-    //printElements(elements);
-
-    cnf.print();
     return 0;
 }
