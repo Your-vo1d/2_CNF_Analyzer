@@ -29,48 +29,141 @@ size_t findSetBitPosition(const BoolVector& bv) {
     throw std::runtime_error("No set bit found in BoolVector");
 }
 
-void solveCNF(CNFClause* head, size_t totalVariables) {
-    Minisat::Solver solver;
-    std::vector<Minisat::Var> vars(totalVariables);
+void printCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements) {
+    // Создаем обратное отображение позиций в имена переменных
+    QHash<int, QString> varNames;
+    for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
+        int pos = it.value()["position"].toInt();
+        varNames[pos] = it.key();
+    }
 
-    for (size_t i = 0; i < totalVariables; ++i)
+    std::cout << "КНФ в формате DIMACS:\n";
+    std::cout << "c Сгенерированная КНФ-формула\n";
+
+    // Подсчет количества переменных и клауз
+    int varCount = elements.size();
+    int clauseCount = 0;
+    CNFClause* current = head;
+    while (current) {
+        clauseCount++;
+        current = current->next;
+    }
+
+    std::cout << "p cnf " << varCount << " " << clauseCount << "\n";
+
+    // Вывод всех клауз
+    current = head;
+    while (current) {
+        // Положительные литералы
+        for (size_t i = 0; i < current->positiveVars.size(); ++i) {
+            if (current->positiveVars.getBit(i)) {
+                std::cout << (i+1) << " "; // DIMACS использует 1-based индексацию
+            }
+        }
+
+        // Отрицательные литералы
+        for (size_t i = 0; i < current->negativeVars.size(); ++i) {
+            if (current->negativeVars.getBit(i)) {
+                std::cout << "-" << (i+1) << " "; // Отрицание в DIMACS
+            }
+        }
+
+        std::cout << "0\n"; // Конец клаузы
+        current = current->next;
+    }
+
+    // Дополнительный вывод с именами переменных
+    std::cout << "\nСоответствие переменных:\n";
+    for (int i = 0; i < varCount + 1; ++i) {
+        if (varNames.contains(i)) {
+            std::cout << (i+1) << " -> " << varNames[i].toStdString() << "\n";
+        } else {
+            std::cout << (i+1) << " -> N" << (i - elements.size()) << "\n";
+        }
+    }
+}
+
+void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements) {
+    Minisat::Solver solver;
+    printCNF(head, elements);
+    // Находим максимальную позицию среди элементов
+    size_t maxPos = 0;
+    for (const auto& elem : elements) {
+        size_t pos = elem["position"].toUInt();
+        if (pos > maxPos) maxPos = pos;
+    }
+    size_t totalVariables = maxPos + 1; // +1 потому что позиции начинаются с 0
+
+    qDebug() << "Total variables:" << totalVariables;
+
+    // Создаем переменные в решателе
+    std::vector<Minisat::Var> vars(totalVariables);
+    for (size_t i = 0; i < totalVariables; ++i) {
         vars[i] = solver.newVar();
+    }
 
     CNFClause* current = head;
     while (current) {
         Minisat::vec<Minisat::Lit> clause;
 
-        for (size_t i = 0; i < current->positiveVars.size(); ++i)
-            if (current->positiveVars.getBit(i))
-                clause.push(Minisat::mkLit(vars[i], false));
+        // Обрабатываем положительные литералы (биты с 1)
+        for (size_t i = 1; i <= current->positiveVars.size(); ++i) {
+            if (current->positiveVars.getBit(i-1)) { // getBit использует 0-based индекс
+                if (i-1 < totalVariables) { // Проверяем границы
+                    clause.push(Minisat::mkLit(vars[i-1], false));
+                }
+            }
+        }
 
-        for (size_t i = 0; i < current->negativeVars.size(); ++i)
-            if (current->negativeVars.getBit(i))
-                clause.push(Minisat::mkLit(vars[i], true));
+        // Обрабатываем отрицательные литералы (биты с 1)
+        for (size_t i = 1; i <= current->negativeVars.size(); ++i) {
+            if (current->negativeVars.getBit(i-1)) {
+                if (i-1 < totalVariables) {
+                    clause.push(Minisat::mkLit(vars[i-1], true));
+                }
+            }
+        }
 
-        solver.addClause(clause);
+        if (clause.size() > 0) {
+            solver.addClause(clause);
+        }
         current = current->next;
     }
 
+    // Добавляем тестовые клаузы (без позиции 0)
     Minisat::vec<Minisat::Lit> allPos, allNeg;
-    for (size_t i = 0; i < totalVariables; ++i) {
+    for (size_t i = 1; i < totalVariables; ++i) {
         allPos.push(Minisat::mkLit(vars[i], false));
         allNeg.push(Minisat::mkLit(vars[i], true));
     }
-    solver.addClause(allPos);
-    solver.addClause(allNeg);
+
+    if (allPos.size() > 0) solver.addClause(allPos);
+    if (allNeg.size() > 0) solver.addClause(allNeg);
 
     if (solver.solve()) {
         std::cout << "Решение найдено:\n";
         for (size_t i = 0; i < totalVariables; ++i) {
-            Minisat::lbool val = solver.modelValue(vars[i]);
-            std::cout << "x" << i << " = " << (val == Minisat::lbool((uint8_t)0)) << "\n";
+            // Пропускаем вывод, если переменная не используется
+            bool used = false;
+            CNFClause* tmp = head;
+            while (tmp) {
+                if ((i < tmp->positiveVars.size() && tmp->positiveVars.getBit(i)) ||
+                    (i < tmp->negativeVars.size() && tmp->negativeVars.getBit(i))) {
+                    used = true;
+                    break;
+                }
+                tmp = tmp->next;
+            }
+
+            if (used) {
+                Minisat::lbool val = solver.modelValue(vars[i]);
+                std::cout << "x" << i << " = " << (val == Minisat::lbool((uint8_t)0)) << "\n";
+            }
         }
     } else {
         std::cout << "Решение не существует\n";
     }
 }
-
 void printElements(const QHash<QString, QHash<QString, QVariant>>& elements) {
     qDebug() << "----------------------------------";
     for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
@@ -139,23 +232,23 @@ void processValueField(const QJsonValue& fieldValue,
 
 void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& currentPosition,
                   QHash<QString, QHash<QString, QVariant>>& elements,
-                  const QString& varName, int clauseId, int& isFirstClause, size_t& max_bytes) {
+                  const QString& varName, int clauseId, int& isFirstClause, size_t& max_bytes, QString& rootName) {
     elements[varName]["memory"] = "N" + QString::number(memoryVarIndex);
     setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
-    if (clauseId == 63) {
-        qDebug() << "temp";
-    }
+
     size_t parentId = currentPosition;
     memoryVarIndex++;
     currentPosition++;
-
+    CNFClause loop_cnf;
+    size_t rootID = elements[rootName]["position"].toInt();
     // Добавление двух дочерних переменных
     for (int i = 0; i < 2; ++i) {
         setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
         temp.position = clauseId;
         temp.setNegativeBit(parentId, "mem_var", max_bytes);
         temp.setPositiveBit(currentPosition, "mem_var", max_bytes);
-
+        loop_cnf.setNegativeBit(currentPosition, "mem_var", max_bytes);
+        loop_cnf.setPositiveBit(rootID, "variable", max_bytes);
         if (isFirstClause == 0) {
             cnf = temp;
             isFirstClause = 1;
@@ -163,6 +256,8 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
             cnf.addClause(temp);
         }
 
+        cnf.addClause(loop_cnf);
+        loop_cnf = CNFClause();
         // Сброс временной клаузы
         temp = CNFClause();
         memoryVarIndex++;
@@ -209,7 +304,7 @@ void processStructureField(const QJsonValue& fieldValue, bool& error, QString& l
                            int& memoryVarIndex, int& nestingLevel,
                            QHash<QString, QHash<QString, QVariant>>& elements,
                            CNFClause& currentClause, int& currentPosition, size_t& max_bytes,
-                           CNFClause& cnf, int& isFirstClause, int clauseId) {
+                           CNFClause& cnf, int& isFirstClause, int clauseId, QString& rootName) {
     if (!fieldValue.isObject()) {
         error = true;
         return;
@@ -250,7 +345,7 @@ void processStructureField(const QJsonValue& fieldValue, bool& error, QString& l
         else if (value.isString() && value.toString() == "malloc") {
             currentClause.setPositiveBit(currentPosition, "mem_var", max_bytes);
             handleMalloc(cnf, temp, memoryVarIndex, currentPosition, elements,
-                         lastName, clauseId, isFirstClause, max_bytes);
+                         lastName, clauseId, isFirstClause, max_bytes, rootName);
         }
         else if (value.isObject()) {
             processNestedValue(value.toObject(), elements, currentClause, lastName, error, max_bytes);
@@ -263,7 +358,7 @@ void processStructureField(const QJsonValue& fieldValue, bool& error, QString& l
         nestingLevel = 1;
         processStructureField(fieldObj["op"], error, lastName, memoryVarIndex,
                               nestingLevel, elements, currentClause, currentPosition,
-                              max_bytes, cnf, isFirstClause, clauseId);
+                              max_bytes, cnf, isFirstClause, clauseId, rootName);
     }
 }
 
@@ -289,7 +384,7 @@ void processBody(const QJsonValue& bodyValue, bool& error,
 
         if (bodyObj.contains("variable")) {
             QString varName = bodyObj["variable"].toString();
-
+            QString rootName = varName;
             if (!elements.contains(varName)) {
                 setElement(elements, varName, "Variable", currentPosition);
                 currentPosition++;
@@ -300,14 +395,15 @@ void processBody(const QJsonValue& bodyValue, bool& error,
                 size_t position = elements[varName]["position"].toInt();
 
                 if (val.isNull()) {
-                    currentClause.setNegativeBit(position, "Variable", max_bytes);
-                    currentClause.setPositiveBit(0, "Variable", max_bytes);
+                    currentClause = CNFClause();
+                    currentClause.position = -1;
+                    return;
                 }
                 else if (val.isString() && val.toString() == "malloc") {
                     currentClause.setNegativeBit(position, "Variable", max_bytes);
                     currentClause.setPositiveBit(currentPosition, "mem_var", max_bytes);
                     handleMalloc(cnf, temp, memoryVarIndex, currentPosition,
-                                 elements, varName, id, isFirstClause, max_bytes);
+                                 elements, varName, id, isFirstClause, max_bytes, rootName);
                 }
                 else if (val.isObject()) {
                     currentClause.setNegativeBit(position, "Variable", max_bytes);
@@ -319,7 +415,7 @@ void processBody(const QJsonValue& bodyValue, bool& error,
                 int nesting = 1;
                 processStructureField(bodyObj["field"], error, varName, memoryVarIndex,
                                       nesting, elements, currentClause, currentPosition,
-                                      max_bytes, cnf, isFirstClause, id);
+                                      max_bytes, cnf, isFirstClause, id, rootName);
             }
         }
         else if (bodyObj.contains("operation")) {
@@ -437,7 +533,7 @@ void parseJsonFile(const QString& filePath,
         }
         if (rowObj.contains("variable")) {
             QString varName = rowObj["variable"].toString();
-
+            QString rootName = varName;
             if (!elements.contains(varName)) {
                 setElement(elements, varName, "Variable", currentPosition);
                 currentPosition++;
@@ -448,14 +544,15 @@ void parseJsonFile(const QString& filePath,
                 size_t varPos = elements[varName]["position"].toInt();
 
                 if (val.isNull()) {
-                    currentClause.setNegativeBit(varPos, "Variable", max_bytes);
-                    currentClause.setPositiveBit(0, "Variable", max_bytes);
+                    currentClause = CNFClause();
+                    currentClause.position = -1;
+                    continue;
                 }
                 else if (val.isString() && val.toString() == "malloc") {
                     currentClause.setNegativeBit(varPos, "Variable", max_bytes);
                     currentClause.setPositiveBit(currentPosition, "mem_var", max_bytes);
                     handleMalloc(cnf, temp, memoryVarIndex, currentPosition,
-                                 elements, varName, clauseId, isFirstClause, max_bytes);
+                                 elements, varName, clauseId, isFirstClause, max_bytes, rootName);
                 }
                 else if (val.isObject()) {
                     currentClause.setNegativeBit(varPos, "Variable", max_bytes);
@@ -467,7 +564,7 @@ void parseJsonFile(const QString& filePath,
                 int nestingLevel = 1;
                 processStructureField(rowObj["field"], error, varName, memoryVarIndex,
                                       nestingLevel, elements, currentClause, currentPosition,
-                                      max_bytes, cnf, isFirstClause, clauseId);
+                                      max_bytes, cnf, isFirstClause, clauseId, rootName);
             }
         }
         else if (rowObj.contains("operation")) {

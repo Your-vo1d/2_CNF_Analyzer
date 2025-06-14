@@ -20,6 +20,6 @@ void processOperation(const QJsonObject& opObj, bool& error,
                       int& currentPosition, int& index_memory_var,
                       CNFClause& current, size_t& max_bytes, CNFClause& cnf, int& isFirstClause, CNFClause& temp);
 
-void solveCNF(CNFClause* head, size_t totalVariables);
+void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements);
 
 #endif // PARSER_JSON_H
