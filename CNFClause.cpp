@@ -38,16 +38,15 @@ void CNFClause::print() const {
 }
 
 void CNFClause::setPositiveBit(size_t position, const QString& varType, size_t& max_bytes) {
-    // Вычисляем требуемые байты
-    size_t required_bytes = ((position) / 8) + 1;
-
     // Определяем новый размер в зависимости от типа
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
+    size_t required_bytes = ((new_bits) / 8) + 1;
+
     // Проверяем и расширяем при необходимости
     if (required_bytes > positiveVars.bytes || positiveVars.bits == 0) {
         if (required_bytes > max_bytes) {
-                    max_bytes = ((new_bits) / 8) + 1;
+            max_bytes = required_bytes;
         }
         positiveVars.resize(new_bits);
         negativeVars.resizeBytes(max_bytes);
@@ -58,13 +57,14 @@ void CNFClause::setPositiveBit(size_t position, const QString& varType, size_t& 
 }
 
 void CNFClause::setNegativeBit(size_t position, const QString& varType, size_t& max_bytes) {
-    size_t required_bytes = ((position) / 8) + 1;
+
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
+    size_t required_bytes = ((new_bits) / 8) + 1;
 
     if (required_bytes > negativeVars.bytes || negativeVars.bits == 0) {
         if (required_bytes > max_bytes) {
-            max_bytes = ((new_bits) / 8) + 1;
+            max_bytes = required_bytes;
         }
         negativeVars.resize(new_bits);
         positiveVars.resizeBytes(max_bytes);
@@ -74,13 +74,13 @@ void CNFClause::setNegativeBit(size_t position, const QString& varType, size_t& 
 }
 
 void CNFClause::clearPositiveBit(size_t position, const QString& varType, size_t& max_bytes) {
-    size_t required_bytes = ((position) / 8) + 1;
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
+    size_t required_bytes = ((new_bits) / 8) + 1;
 
     if (required_bytes > positiveVars.bytes || positiveVars.bits == 0) {
         if (required_bytes > max_bytes) {
-            max_bytes = ((new_bits) / 8) + 1;
+            max_bytes = required_bytes;
         }
         positiveVars.resize(new_bits);
         negativeVars.resizeBytes(max_bytes);
@@ -90,13 +90,13 @@ void CNFClause::clearPositiveBit(size_t position, const QString& varType, size_t
 }
 
 void CNFClause::clearNegativeBit(size_t position, const QString& varType, size_t& max_bytes) {
-    size_t required_bytes = ((position) / 8) + 1;
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
+    size_t required_bytes = ((new_bits) / 8) + 1;
 
     if (required_bytes > negativeVars.bytes || negativeVars.bits == 0) {
         if (required_bytes > max_bytes) {
-            max_bytes = ((new_bits) / 8) + 1;
+            max_bytes = required_bytes;
         }
         negativeVars.resize(new_bits);
                         positiveVars.resizeBytes(max_bytes);
