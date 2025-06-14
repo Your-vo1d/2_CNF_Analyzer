@@ -8,6 +8,7 @@
 #include <iostream>
 #include "minisat/core/Solver.h"
 
+// Находит позицию первого установленного бита в битовом векторе
 size_t findSetBitPosition(const BoolVector& bv) {
     if (bv.isZero())
         throw std::runtime_error("No set bit found in BoolVector");
@@ -74,7 +75,7 @@ void printCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
 
     // Дополнительный вывод с именами переменных
     std::cout << "\nСоответствие переменных:\n";
-    for (int i = 0; i < varCount + 1; ++i) {
+    for (int i = 1; i < varCount + 1; ++i) {
         if (varNames.contains(i)) {
             std::cout << (i+1) << " -> " << varNames[i].toStdString() << "\n";
         } else {
@@ -164,6 +165,7 @@ void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
         std::cout << "Решение не существует\n";
     }
 }
+
 void printElements(const QHash<QString, QHash<QString, QVariant>>& elements) {
     qDebug() << "----------------------------------";
     for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
@@ -235,8 +237,45 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
                   const QString& varName, int clauseId, int& isFirstClause, size_t& max_bytes, QString& rootName) {
     elements[varName]["memory"] = "N" + QString::number(memoryVarIndex);
     setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
-
     size_t parentId = currentPosition;
+    // Удаляем старые клаузы, связывающие этот элемент с корнем (если они есть)
+        size_t parentVarPos = elements[varName]["position"].toInt();
+    CNFClause* prev = nullptr;
+    CNFClause* current = &cnf;
+    while (current) {
+        bool containsRootLink = false;
+
+        // Проверяем, содержит ли клауза связь с корнем
+        if (current->positiveVars.getBit(0) || current->negativeVars.getBit(0)) {
+            // Проверяем, относится ли эта клауза к нашему элементу
+            if (current->positiveVars.getBit(parentVarPos) && current->negativeVars.getBit(parentId)) {
+                containsRootLink = true;
+            }
+        }
+
+        if (containsRootLink) {
+            // Удаляем клаузу
+            if (prev) {
+                prev->next = current->next;
+                delete current;
+                current = prev->next;
+                break;
+            } else {
+                // Это первая клауза в списке
+                CNFClause* toDelete = &cnf;
+                cnf = *(cnf.next);
+                current = &cnf;
+                delete toDelete;
+                break;
+            }
+        } else {
+            prev = current;
+            current = current->next;
+        }
+    }
+
+
+
     memoryVarIndex++;
     currentPosition++;
     CNFClause loop_cnf;
@@ -340,6 +379,9 @@ void processStructureField(const QJsonValue& fieldValue, bool& error, QString& l
 
         QJsonValue value = fieldObj["value"];
         if (value.isNull()) {
+            currentClause = CNFClause();
+            currentClause.position = -1;
+            return;
             currentClause.setPositiveBit(0, "Variable", max_bytes);
         }
         else if (value.isString() && value.toString() == "malloc") {
@@ -575,7 +617,11 @@ void parseJsonFile(const QString& filePath,
         if (isFirstClause == 0) {
             cnf = currentClause;
             isFirstClause = 1;
-        } else {
+        }
+        else if (currentClause.position == -1) {
+            continue;
+        }
+        else {
             cnf.addClause(currentClause);
         }
 
