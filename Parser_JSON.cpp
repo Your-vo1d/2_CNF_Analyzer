@@ -6,7 +6,7 @@
 #include <QDebug>
 #include <QSet>
 #include <iostream>
-#include "minisat/core/Solver.h"
+#include <minisat/core/Solver.h>
 
 // Находит позицию первого установленного бита в битовом векторе
 size_t findSetBitPosition(const BoolVector& bv) {
@@ -239,7 +239,7 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
     setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
     size_t parentId = currentPosition;
     // Удаляем старые клаузы, связывающие этот элемент с корнем (если они есть)
-        size_t parentVarPos = elements[varName]["position"].toInt();
+    size_t parentVarPos = elements[varName]["position"].toInt();
     CNFClause* prev = nullptr;
     CNFClause* current = &cnf;
     while (current) {
