@@ -5,18 +5,13 @@ CONFIG += c++17 cmdline
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
-
-INCLUDEPATH += $$PWD/minisat
-DEPENDPATH += $$PWD/minisat
-
+INCLUDEPATH += /usr/local/include
+LIBS += -L/usr/local/lib -lminisat
 SOURCES += \
     main.cpp \
     Parser_JSON.cpp \
     CNFClause.cpp \
     BoolVector.cpp \
-    $$PWD/minisat/core/Solver.cc \
-    $$PWD/minisat/utils/Options.cc \
-    $$PWD/minisat/utils/System.cc
 # TRANSLATIONS += \
 #    Course_work_ru_RU.ts
 # CONFIG += lrelease
@@ -31,8 +26,4 @@ HEADERS += \
     Parser_JSON.h \
     BoolVector.h \
     CNFClause.h \
-    $$PWD/minisat/core/Solver.h \
-    $$PWD/minisat/mtl/Vec.h \
-    $$PWD/minisat/utils/Options.h
 
-DISTFILES +=
