@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
     clause2->next = nullptr;
 
     // Решаем КНФ
-    solveCNF(clause1,2);
+    solveCNF(&cnf,elements);
     if (error) {
         qCritical() << "Error:";
         return 1;
