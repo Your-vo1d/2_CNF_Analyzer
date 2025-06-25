@@ -293,7 +293,8 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
     size_t parentVarPos = elements[rootName]["position"].toInt();
     CNFClause* prev = nullptr;
     CNFClause* current = &cnf;
-
+    if (rootName != varName)
+        removeRootLinkClauses(cnf, parentVarPos, parentId);
     memoryVarIndex++;
     currentPosition++;
     CNFClause loop_cnf;
@@ -647,5 +648,4 @@ void parseJsonFile(const QString& filePath,
             cnf.resizeAll(max_bytes);
         }
     }
-    removeRootLinkClauses(cnf, 3, 1);
 }
