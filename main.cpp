@@ -28,28 +28,7 @@ int main(int argc, char *argv[]) {
     printElements(elements);
     cnf.print();
     std::cout << "-----------------------" <<std::endl;
-    BoolVector pos1(16);
-    BoolVector neg1(16);
-    pos1.setBit(0);  // 10000000 00000000
-    neg1.setBit(1);  // 01000000 00000000
 
-    // Создаем клаузу 2: (x3 ∨ ¬x1)
-    BoolVector pos2(16);
-    BoolVector neg2(16);
-    pos2.setBit(1);  // 00010000 00000000
-    neg2.setBit(0);  // 01000000 00000000
-
-    // Создаем связанный список клауз
-    CNFClause* clause1 = new CNFClause();
-    clause1->positiveVars = pos1;
-    clause1->negativeVars = neg1;
-    clause1->print();
-    CNFClause* clause2 = new CNFClause();
-    clause2->positiveVars = pos2;
-    clause2->negativeVars = neg2;
-    clause2->print();
-    clause1->next = clause2;
-    clause2->next = nullptr;
 
     // Решаем КНФ
     solveCNF(&cnf,elements);

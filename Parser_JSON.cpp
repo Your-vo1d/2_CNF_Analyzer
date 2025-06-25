@@ -8,6 +8,56 @@
 #include <iostream>
 #include <minisat/core/Solver.h>
 
+void removeRootLinkClauses(CNFClause& head, size_t rootPos, size_t varPos) {
+    CNFClause* prev = nullptr;
+    CNFClause* current = &head;
+
+    while (current) {
+        bool condition = false;
+        bool validRoot = (rootPos < current->positiveVars.size());
+        bool validVar = (varPos < current->negativeVars.size());
+
+        if (validRoot && validVar) {
+            condition = current->positiveVars.getBit(rootPos) &&
+                        current->negativeVars.getBit(varPos);
+        }
+
+        if (condition) {
+            if (prev) {
+                // Удаление из середины/конца списка
+                prev->next = current->next;
+                current->next = nullptr;  // Важно: обнуляем next перед удалением
+                delete current;
+                current = prev->next;
+            } else {
+                // Удаление первого элемента
+                if (current->next) {
+                    // Копируем данные из следующего узла
+                    CNFClause* nextNode = current->next;
+                    current->position = nextNode->position;
+                    current->positiveVars = nextNode->positiveVars;
+                    current->negativeVars = nextNode->negativeVars;
+
+                    // Обновляем связи
+                    current->next = nextNode->next;
+
+                    // Изолируем и удаляем следующий узел
+                    nextNode->next = nullptr;
+                    delete nextNode;
+                } else {
+                    // Сброс единственного элемента
+                    current->position = -1;
+                    current->positiveVars = BoolVector();
+                    current->negativeVars = BoolVector();
+                }
+            }
+            break;  // Удаляем только одну клаузу
+        } else {
+            prev = current;
+            current = current->next;
+        }
+    }
+}
 // Находит позицию первого установленного бита в битовом векторе
 size_t findSetBitPosition(const BoolVector& bv) {
     if (bv.isZero())
@@ -237,44 +287,12 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
                   const QString& varName, int clauseId, int& isFirstClause, size_t& max_bytes, QString& rootName) {
     elements[varName]["memory"] = "N" + QString::number(memoryVarIndex);
     setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
-    size_t parentId = currentPosition;
-    // Удаляем старые клаузы, связывающие этот элемент с корнем (если они есть)
-    size_t parentVarPos = elements[varName]["position"].toInt();
+    size_t parentId = elements[varName]["position"].toInt();
+
+    // Удаление старых клауз связывающих с корнем
+    size_t parentVarPos = elements[rootName]["position"].toInt();
     CNFClause* prev = nullptr;
     CNFClause* current = &cnf;
-    while (current) {
-        bool containsRootLink = false;
-
-        // Проверяем, содержит ли клауза связь с корнем
-        if (current->positiveVars.getBit(0) || current->negativeVars.getBit(0)) {
-            // Проверяем, относится ли эта клауза к нашему элементу
-            if (current->positiveVars.getBit(parentVarPos) && current->negativeVars.getBit(parentId)) {
-                containsRootLink = true;
-            }
-        }
-
-        if (containsRootLink) {
-            // Удаляем клаузу
-            if (prev) {
-                prev->next = current->next;
-                delete current;
-                current = prev->next;
-                break;
-            } else {
-                // Это первая клауза в списке
-                CNFClause* toDelete = &cnf;
-                cnf = *(cnf.next);
-                current = &cnf;
-                delete toDelete;
-                break;
-            }
-        } else {
-            prev = current;
-            current = current->next;
-        }
-    }
-
-
 
     memoryVarIndex++;
     currentPosition++;
@@ -348,7 +366,6 @@ void processStructureField(const QJsonValue& fieldValue, bool& error, QString& l
         error = true;
         return;
     }
-
     QJsonObject fieldObj = fieldValue.toObject();
     CNFClause temp;
 
@@ -614,6 +631,7 @@ void parseJsonFile(const QString& filePath,
                              currentPosition, memoryVarIndex, currentClause,
                              max_bytes, cnf, isFirstClause, clauseId);
         }
+
         if (isFirstClause == 0) {
             cnf = currentClause;
             isFirstClause = 1;
@@ -629,4 +647,5 @@ void parseJsonFile(const QString& filePath,
             cnf.resizeAll(max_bytes);
         }
     }
+    removeRootLinkClauses(cnf, 3, 1);
 }
