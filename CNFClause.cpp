@@ -143,3 +143,16 @@ void CNFClause::resize(size_t newSize) {
     negativeVars.resize(newSize);
 
 }
+
+void CNFClause::copyFrom(const CNFClause& other) {
+    this->position = other.position;
+    this->positiveVars = other.positiveVars;
+    this->negativeVars = other.negativeVars;
+}
+
+void CNFClause::reset() {
+    position = -1;
+    positiveVars = BoolVector();
+    negativeVars = BoolVector();
+    // next остается nullptr
+}
