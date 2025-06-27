@@ -287,14 +287,18 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
                   const QString& varName, int clauseId, int& isFirstClause, size_t& max_bytes, QString& rootName) {
     elements[varName]["memory"] = "N" + QString::number(memoryVarIndex);
     setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
+    size_t negative_bit_position = elements["N" + QString::number(memoryVarIndex)]["position"].toInt();
     size_t parentId = elements[varName]["position"].toInt();
 
     // Удаление старых клауз связывающих с корнем
     size_t parentVarPos = elements[rootName]["position"].toInt();
     CNFClause* prev = nullptr;
     CNFClause* current = &cnf;
-    if (rootName != varName)
-        removeRootLinkClauses(cnf, parentVarPos, parentId);
+    std::cout << parentVarPos << " " << parentId <<std::endl;
+    if (rootName != varName) {
+        std::cout <<"ff" <<std::endl;
+                removeRootLinkClauses(cnf, parentVarPos, parentId);
+    }
     memoryVarIndex++;
     currentPosition++;
     CNFClause loop_cnf;
@@ -303,7 +307,7 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
     for (int i = 0; i < 2; ++i) {
         setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
         temp.position = clauseId;
-        temp.setNegativeBit(parentId, "mem_var", max_bytes);
+        temp.setNegativeBit(negative_bit_position, "mem_var", max_bytes);
         temp.setPositiveBit(currentPosition, "mem_var", max_bytes);
         loop_cnf.setNegativeBit(currentPosition, "mem_var", max_bytes);
         loop_cnf.setPositiveBit(rootID, "variable", max_bytes);
@@ -322,6 +326,8 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
         currentPosition++;
     }
 }
+
+//void delete_con_clauses()
 
 void processNestedValue(const QJsonObject& valueObj,
                         QHash<QString, QHash<QString, QVariant>>& elements,
@@ -576,6 +582,7 @@ void parseJsonFile(const QString& filePath,
     int currentPosition = 1;
     int memoryVarIndex = 0;
     int isFirstClause = 0;
+    int clauseId;
     QJsonArray rows = codeObject["rows"].toArray();
     CNFClause temp;
 
@@ -585,7 +592,7 @@ void parseJsonFile(const QString& filePath,
         QJsonObject rowObj = row.toObject();
         if (!rowObj.contains("id")) continue;
 
-        int clauseId = rowObj["id"].toInt();
+        clauseId = rowObj["id"].toInt();
         CNFClause currentClause;
         currentClause.position = clauseId;
         if (clauseId == 63){
@@ -647,5 +654,8 @@ void parseJsonFile(const QString& filePath,
         if (max_bytes > current_bytes) {
             cnf.resizeAll(max_bytes);
         }
+        printElements(elements);
+        cnf.print();
+        solveCNF(&cnf,elements);
     }
 }
