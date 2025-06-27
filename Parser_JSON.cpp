@@ -134,9 +134,8 @@ void printCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
     }
 }
 
-void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements) {
+void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements, bool& error) {
     Minisat::Solver solver;
-    printCNF(head, elements);
     // Находим максимальную позицию среди элементов
     size_t maxPos = 0;
     for (const auto& elem : elements) {
@@ -144,8 +143,6 @@ void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
         if (pos > maxPos) maxPos = pos;
     }
     size_t totalVariables = maxPos + 1; // +1 потому что позиции начинаются с 0
-
-    qDebug() << "Total variables:" << totalVariables;
 
     // Создаем переменные в решателе
     std::vector<Minisat::Var> vars(totalVariables);
@@ -211,8 +208,9 @@ void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
                 std::cout << "x" << i << " = " << (val == Minisat::lbool((uint8_t)0)) << "\n";
             }
         }
+        error = true;
     } else {
-        std::cout << "Решение не существует\n";
+        error = false;
     }
 }
 
@@ -294,9 +292,7 @@ void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& cur
     size_t parentVarPos = elements[rootName]["position"].toInt();
     CNFClause* prev = nullptr;
     CNFClause* current = &cnf;
-    std::cout << parentVarPos << " " << parentId <<std::endl;
     if (rootName != varName) {
-        std::cout <<"ff" <<std::endl;
                 removeRootLinkClauses(cnf, parentVarPos, parentId);
     }
     memoryVarIndex++;
@@ -539,7 +535,7 @@ void processOperation(const QJsonObject& opObj, bool& error,
 
 void parseJsonFile(const QString& filePath,
                    QHash<QString, QHash<QString, QVariant>>& elements,
-                   bool& error, CNFClause& cnf) {
+                   bool& error, CNFClause& cnf, bool& memory_leak) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         qWarning() << "Failed to open file:" << filePath;
@@ -585,7 +581,6 @@ void parseJsonFile(const QString& filePath,
     int clauseId;
     QJsonArray rows = codeObject["rows"].toArray();
     CNFClause temp;
-
     for (const QJsonValue& row : rows) {
         if (!row.isObject()) continue;
 
@@ -595,9 +590,6 @@ void parseJsonFile(const QString& filePath,
         clauseId = rowObj["id"].toInt();
         CNFClause currentClause;
         currentClause.position = clauseId;
-        if (clauseId == 63){
-            qDebug() << "Temp";
-        }
         if (rowObj.contains("variable")) {
             QString varName = rowObj["variable"].toString();
             QString rootName = varName;
@@ -654,8 +646,15 @@ void parseJsonFile(const QString& filePath,
         if (max_bytes > current_bytes) {
             cnf.resizeAll(max_bytes);
         }
-        printElements(elements);
-        cnf.print();
-        solveCNF(&cnf,elements);
+        solveCNF(&cnf,elements, memory_leak);
+        if (memory_leak) {
+            qCritical() << "Ошибка в памяти";
+            qCritical() << "Позиция: " << clauseId ;
+            return;
+        }
+        if (error) {
+            qCritical() << "Error:";
+            return;
+        }
     }
 }

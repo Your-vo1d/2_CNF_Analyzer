@@ -7,7 +7,7 @@
 #include <QVariant>
 
 void parseJsonFile(const QString& filePath,
-                   QHash<QString, QHash<QString, QVariant>>& elements, bool& error, CNFClause& cnf);
+                   QHash<QString, QHash<QString, QVariant>>& elements, bool& error, CNFClause& cnf, bool& memory_leak);
 
 void printElements(const QHash<QString, QHash<QString, QVariant>>& elements);
 void processBody(const QJsonValue& bodyValue, bool& error,
@@ -20,6 +20,6 @@ void processOperation(const QJsonObject& opObj, bool& error,
                       int& currentPosition, int& index_memory_var,
                       CNFClause& current, size_t& max_bytes, CNFClause& cnf, int& isFirstClause, CNFClause& temp);
 
-void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements);
+void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements, bool& error);
 
 #endif // PARSER_JSON_H
