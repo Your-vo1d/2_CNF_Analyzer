@@ -1,0 +1,61 @@
+{
+   "code": {
+       "rows": [
+           {
+               "id": 56,
+               "variable": "root",
+               "value": "malloc"
+           },
+           {
+               "id": 63,
+               "variable": "root",
+               "field": {
+                   "f": "left",
+                   "value": "malloc"
+               }
+           },
+           {
+               "id": 65,
+               "variable": "root",
+               "field": {
+                   "f": "left",
+                   "op": {
+                       "f": "right",
+                       "value": "malloc"
+                   }
+               }
+           },
+           {
+               "id": 200,
+               "variable": "new_node",
+               "value": "malloc"
+           },
+           {
+               "id": 201,
+               "variable": "root",
+               "field": {
+                   "f": "left",
+                   "value": {
+                       "variable": "new_node"
+                   }
+               }
+           },
+           {
+               "id": 202,
+               "variable": "new_node",
+               "field": {
+                   "f": "left",
+                   "value": {
+                       "variable": "root",
+                       "field": {
+                           "f": "left",
+                           "field": {
+                               "f": "left"
+                           }
+                       }
+                   }
+               }
+           }
+       ]
+   }
+}
