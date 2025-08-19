@@ -1,8 +1,8 @@
-#include "CNFClause.h"
+#include "CNFNode.h"
 #include <stdio.h>
 #include <iostream>
 #include <string.h>
-CNFClause::CNFClause()
+CNFNode::CNFNode()
     : positiveVars(),  // Явный вызов конструктора по умолчанию BoolVector
     negativeVars(),  // Явный вызов конструктора по умолчанию BoolVector
     next(nullptr)    // Инициализация указателя как nullptr
@@ -10,19 +10,19 @@ CNFClause::CNFClause()
 }
 
 
-CNFClause::CNFClause(size_t bits)
+CNFNode::CNFNode(size_t bits)
     : positiveVars(bits),  // Явный вызов конструктора по умолчанию BoolVector
     negativeVars(bits),  // Явный вызов конструктора по умолчанию BoolVector
     next(nullptr)    // Инициализация указателя как nullptr
 {
 }
 
-CNFClause::~CNFClause() {
+CNFNode::~CNFNode() {
     if (next) delete next;
 }
 
-void CNFClause::print() const {
-    const CNFClause* current = this;  // Начинаем с текущей клаузы
+void CNFNode::print() const {
+    const CNFNode* current = this;  // Начинаем с текущей клаузы
     size_t clause_num = 1;           // Номер текущей клаузы
 
     while (current != nullptr) {      // Пока не дошли до конца списка
@@ -37,7 +37,7 @@ void CNFClause::print() const {
     }
 }
 
-void CNFClause::setPositiveBit(size_t position, const QString& varType, size_t& max_bytes) {
+void CNFNode::setPositiveBit(size_t position, const QString& varType, size_t& max_bytes) {
     // Определяем новый размер в зависимости от типа
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
@@ -56,7 +56,7 @@ void CNFClause::setPositiveBit(size_t position, const QString& varType, size_t& 
     positiveVars.setBit(position);
 }
 
-void CNFClause::setNegativeBit(size_t position, const QString& varType, size_t& max_bytes) {
+void CNFNode::setNegativeBit(size_t position, const QString& varType, size_t& max_bytes) {
 
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
@@ -73,7 +73,7 @@ void CNFClause::setNegativeBit(size_t position, const QString& varType, size_t& 
     negativeVars.setBit(position);
 }
 
-void CNFClause::clearPositiveBit(size_t position, const QString& varType, size_t& max_bytes) {
+void CNFNode::clearPositiveBit(size_t position, const QString& varType, size_t& max_bytes) {
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
     size_t required_bytes = ((new_bits) / 8) + 1;
@@ -89,7 +89,7 @@ void CNFClause::clearPositiveBit(size_t position, const QString& varType, size_t
     positiveVars.clearBit(position);
 }
 
-void CNFClause::clearNegativeBit(size_t position, const QString& varType, size_t& max_bytes) {
+void CNFNode::clearNegativeBit(size_t position, const QString& varType, size_t& max_bytes) {
     size_t size_increment = (varType == "variable") ? 1 : 2;
     size_t new_bits = position + size_increment;
     size_t required_bytes = ((new_bits) / 8) + 1;
@@ -105,12 +105,12 @@ void CNFClause::clearNegativeBit(size_t position, const QString& varType, size_t
     negativeVars.clearBit(position);
 }
 // Изменённый метод addClause
-void CNFClause::addClause(const CNFClause& newClause) {
-    CNFClause* current = this;
+void CNFNode::addClause(const CNFNode& newClause) {
+    CNFNode* current = this;
     while (current->next != nullptr) {
         current = current->next;
     }
-    current->next = new CNFClause();
+    current->next = new CNFNode();
     // Получаем размеры через const-корректные методы
     size_t posSize = newClause.positiveVars.count_bytes() * 8; // Переводим байты в биты
     size_t negSize = newClause.negativeVars.count_bytes() * 8;
@@ -127,8 +127,8 @@ void CNFClause::addClause(const CNFClause& newClause) {
 }
 
 // Изменённый метод resizeAll
-void CNFClause::resizeAll(size_t newSize) {
-    CNFClause* current = this;  // начинаем с текущей клаузы
+void CNFNode::resizeAll(size_t newSize) {
+    CNFNode* current = this;  // начинаем с текущей клаузы
 
     while (current != nullptr) {  // пока не дошли до конца списка
         current->positiveVars.resizeBytes(newSize);
@@ -138,19 +138,19 @@ void CNFClause::resizeAll(size_t newSize) {
 }
 
 
-void CNFClause::resize(size_t newSize) {
+void CNFNode::resize(size_t newSize) {
     positiveVars.resize(newSize);
     negativeVars.resize(newSize);
 
 }
 
-void CNFClause::copyFrom(const CNFClause& other) {
+void CNFNode::copyFrom(const CNFNode& other) {
     this->position = other.position;
     this->positiveVars = other.positiveVars;
     this->negativeVars = other.negativeVars;
 }
 
-void CNFClause::reset() {
+void CNFNode::reset() {
     position = -1;
     positiveVars = BoolVector();
     negativeVars = BoolVector();

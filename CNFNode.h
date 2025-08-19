@@ -1,22 +1,22 @@
-#ifndef CNFCLAUSE_H
-#define CNFCLAUSE_H
+#ifndef CNFNode_H
+#define CNFNode_H
 
 #include "BoolVector.h"
 #include <QString>
 #include <QVariant>
 #include <QHash>
 
-class CNFClause {
+class CNFNode {
 public:
     BoolVector positiveVars;
     BoolVector negativeVars;
-    CNFClause* next;
+    CNFNode* next;
     int position;
 
-    CNFClause();
-    CNFClause(size_t bits);
-    CNFClause(const char* posStr, const char* negStr);
-    ~CNFClause();
+    CNFNode();
+    CNFNode(size_t bits);
+    CNFNode(const char* posStr, const char* negStr);
+    ~CNFNode();
     
     void print() const;
     
@@ -25,12 +25,12 @@ public:
     void clearPositiveBit(size_t position, const QString& varType, size_t& max_bytes);
     void setNegativeBit(size_t position, const QString& varType, size_t& max_bytes);
     void clearNegativeBit(size_t position, const QString& varType, size_t& max_bytes);
-    void delete_clause(size_t bit_position, int& currentPosition, QHash<QString, QHash<QString, QVariant>>& elements, const QString& varName, CNFClause& cnf);
-    void addClause(const CNFClause& newClause);
+    void delete_clause(size_t bit_position, int& currentPosition, QHash<QString, QHash<QString, QVariant>>& elements, const QString& varName, CNFNode& cnf);
+    void addClause(const CNFNode& newClause);
     void resizeAll(size_t newSize);
     void resize(size_t newSize);
-    void copyFrom(const CNFClause& other);
+    void copyFrom(const CNFNode& other);
     void reset();
 };
 
-#endif // CNFCLAUSE_H
+#endif // CNFNode_H
