@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 class BoolVector {
-     friend class CNFClause;
+     friend class CNFNode;
 private:
     unsigned char* vector;
     size_t bits;
