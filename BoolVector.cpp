@@ -61,7 +61,7 @@ void BoolVector::print() const {
         {
             unsigned char mask = 1 << 7; // Создаем маску, начиная с самого левого бита
             // Цикл для обработки каждого бита в байте
-            for (int j = 0; j < 8; j++)
+            for (size_t j = 0; j < 8; j++)
             {
                 if ((vector[i] & mask) != 0)
                     printf("1"); // Выводим "1", если бит установлен
@@ -118,11 +118,11 @@ void BoolVector::resizeBytes(size_t nbytes) {
         unsigned char *newVector = (unsigned char *)malloc(sizeof(unsigned char) * new_bytes); // выделение памяти под вектор
         if (newVector)
         {
-            for (int i = 0; i < new_bytes; i++)
+            for (size_t i = 0; i < new_bytes; i++)
             { // Обнуление вектора
                 newVector[i] = 0;
             }
-            for (int i = 0; i < old_bytes; i++)
+            for (size_t i = 0; i < old_bytes; i++)
             { // Перенос значения на другой вектор
                 newVector[i] = vector[i];
             }
@@ -144,11 +144,11 @@ void BoolVector::resize(size_t new_size) {
         unsigned char *newVector = (unsigned char *)malloc(sizeof(unsigned char) * new_bytes); // выделение памяти под вектор
         if (newVector)
         {
-            for (int i = 0; i < new_bytes; i++)
+            for (size_t i = 0; i < new_bytes; i++)
             { // Обнуление вектора
                 newVector[i] = 0;
             }
-            for (int i = 0; i < old_bytes; i++)
+            for (size_t i = 0; i < old_bytes; i++)
             { // Перенос значения на другой вектор
                 newVector[i] = vector[i];
             }
