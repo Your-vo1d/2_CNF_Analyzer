@@ -1,148 +1,690 @@
 #include "Parser_JSON.h"
-#include <QFile>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QDebug>
-#include <QSet>
-#include <iostream>
-#include <minisat/core/Solver.h>
 
-void removeRootLinkClauses(CNFClause& head, size_t rootPos, size_t varPos) {
-    CNFClause* prev = nullptr;
-    CNFClause* current = &head;
+Parser_JSON::Parser_JSON()
+    : treeManager_(new TreeManager()),
+    has_error_(false),
+    has_memory_leak_(false),
+    current_position_(0),
+    memory_var_index_(0),
+    max_bytes_count_(1)
+{
+}
 
-    while (current) {
-        bool condition = false;
-        bool validRoot = (rootPos < current->positiveVars.size());
-        bool validVar = (varPos < current->negativeVars.size());
+Parser_JSON::~Parser_JSON()
+{
+    delete treeManager_;
+}
 
-        if (validRoot && validVar) {
-            condition = current->positiveVars.getBit(rootPos) &&
-                        current->negativeVars.getBit(varPos);
+bool Parser_JSON::parseJsonFile(const QString& file_path)
+{
+    QFile file(file_path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        std::cout << "Error: Failed to open file: " << file_path.toStdString() << std::endl;
+        has_error_ = true;
+        return false;
+    }
+
+    QJsonParseError parse_error;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parse_error);
+    file.close();
+
+    if (doc.isNull()) {
+        std::cout << "Error: JSON parse error: " << parse_error.errorString().toStdString() << std::endl;
+        has_error_ = true;
+        return false;
+    }
+
+    if (!doc.isObject()) {
+        std::cout << "Error: Invalid JSON structure" << std::endl;
+        has_error_ = true;
+        return false;
+    }
+
+    QJsonObject root_obj = doc.object();
+    if (!root_obj.contains("code") || !root_obj["code"].isObject()) {
+        std::cout << "Error: Missing 'code' object" << std::endl;
+        has_error_ = true;
+        return false;
+    }
+
+    QJsonObject code_obj = root_obj["code"].toObject();
+    if (!code_obj.contains("rows") || !code_obj["rows"].isArray()) {
+        std::cout << "Error: Missing 'rows' array" << std::endl;
+        has_error_ = true;
+        return false;
+    }
+
+    Tree* current_tree = nullptr;
+    QJsonArray rows = code_obj["rows"].toArray();
+
+    std::cout << "=== Starting parsing of " << rows.size() << " rows ===" << std::endl;
+
+    for (const QJsonValue& row : rows) {
+        if (!row.isObject()) {
+            std::cout << "Error: Invalid row structure" << std::endl;
+            has_error_ = true;
+            continue;
         }
 
-        if (condition) {
-            if (prev) {
-                // Удаление из середины/конца списка
-                prev->next = current->next;
-                current->next = nullptr;  // Важно: обнуляем next перед удалением
-                delete current;
-                current = prev->next;
-            } else {
-                // Удаление первого элемента
-                if (current->next) {
-                    // Копируем данные из следующего узла
-                    CNFClause* nextNode = current->next;
-                    current->position = nextNode->position;
-                    current->positiveVars = nextNode->positiveVars;
-                    current->negativeVars = nextNode->negativeVars;
+        QJsonObject row_obj = row.toObject();
+        if (!row_obj.contains("id")) {
+            std::cout << "Error: Row missing id" << std::endl;
+            has_error_ = true;
+            continue;
+        }
 
-                    // Обновляем связи
-                    current->next = nextNode->next;
+        int clause_id = row_obj["id"].toInt();
+        if (clause_id == 1){
+            std::cout <<"t";
+        }
+        std::cout << "\n=== Processing row " << clause_id << " ===" << std::endl;
 
-                    // Изолируем и удаляем следующий узел
-                    nextNode->next = nullptr;
-                    delete nextNode;
-                } else {
-                    // Сброс единственного элемента
-                    current->position = -1;
-                    current->positiveVars = BoolVector();
-                    current->negativeVars = BoolVector();
+        // Обработка переменной
+        if (row_obj.contains("variable")) {
+            QString var_name = row_obj["variable"].toString();
+            std::cout << "Processing variable: " << var_name.toStdString() << std::endl;
+
+            // Создаем или получаем дерево для этой переменной
+            if (!treeManager_->containsTree(var_name)) {
+                Tree* new_tree = new Tree(var_name);
+                treeManager_->addTree(var_name, new_tree);
+
+                // Создаем корневой элемент
+                TreeElement* root_element = new TreeElement(var_name, 1, current_position_++);
+                new_tree->addElement(var_name, root_element);
+                new_tree->setRoot(root_element);
+
+                max_bytes_count_ = std::max(max_bytes_count_, BoolVector::calculateBytes(current_position_));
+                std::cout << "Created new tree: " << var_name.toStdString() << std::endl;
+            }
+
+            current_tree = treeManager_->getTree(var_name);
+
+            if (row_obj.contains("value")) {
+                QJsonValue val = row_obj["value"];
+
+                if (val.isNull()) {
+                    std::cout << "Value is null, skipping" << std::endl;
+                    continue;
+                } else if (val.isString() && val.toString() == "malloc") {
+                    std::cout << "Handling malloc for: " << var_name.toStdString() << std::endl;
+                    handleMalloc(current_tree, var_name, clause_id);
+                } else if (val.isString() && val.toString() == "free") {
+                    std::cout << "Handling free for: " << var_name.toStdString() << std::endl;
+                    handleFree(current_tree, var_name);
+                } else if (val.isObject()) {
+                    std::cout << "Processing nested value for: " << var_name.toStdString() << std::endl;
+                    processNestedValue(val.toObject(), current_tree, var_name, clause_id);
+                }
+            } else if (row_obj.contains("field")) {
+                std::cout << "Processing structure field for: " << var_name.toStdString() << std::endl;
+                processStructureField(row_obj["field"], current_tree, var_name, clause_id);
+            }
+        }
+        // Обработка операции
+        else if (row_obj.contains("operation")) {
+            std::cout << "Processing operation" << std::endl;
+            if (!current_tree) {
+                std::cout << "Warning: Operation without current tree, using first available tree" << std::endl;
+                if (!treeManager_->getAllTrees().isEmpty()) {
+                    current_tree = treeManager_->getAllTrees().first();
                 }
             }
-            break;  // Удаляем только одну клаузу
+            if (current_tree) {
+                processOperation(row_obj["operation"].toObject(), current_tree, clause_id);
+            } else {
+                std::cout << "Error: No tree available for operation" << std::endl;
+                has_error_ = true;
+            }
         } else {
-            prev = current;
-            current = current->next;
+            std::cout << "Warning: Row " << clause_id << " doesn't contain variable or operation" << std::endl;
         }
-    }
-}
-// Находит позицию первого установленного бита в битовом векторе
-size_t findSetBitPosition(const BoolVector& bv) {
-    if (bv.isZero())
-        throw std::runtime_error("No set bit found in BoolVector");
 
-    const auto* data = bv.getVector();
-    const size_t byteCount = bv.count_bytes();
+        // После обработки каждой строки выполняем solveCNF для ВСЕХ деревьев
+        std::cout << "\n=== Solving CNF for ALL trees after row " << clause_id << " ===" << std::endl;
+        QMap<QString, Tree*> all_trees = treeManager_->getAllTrees();
+        std::cout << "Total trees: " << all_trees.size() << std::endl;
 
-    for (size_t byteIndex = 0; byteIndex < byteCount; ++byteIndex) {
-        unsigned char byte = data[byteIndex];
-        if (!byte) continue;
+        bool any_leak_detected = false;
 
-        for (size_t bitOffset = 0; bitOffset < 8; ++bitOffset) {
-            size_t bitPosInByte = 7 - bitOffset;
-            if (byte & (1 << bitPosInByte)) {
-                return byteIndex * 8 + bitOffset;
+        for (auto it = all_trees.constBegin(); it != all_trees.constEnd(); ++it) {
+            Tree* tree = it.value();
+            std::cout << "\n--- Analyzing tree: " << tree->getName().toStdString() << " ---" << std::endl;
+
+            // Выводим все соединения текущего дерева с правильной логикой векторов
+            QList<Connection> connections = tree->getConnections();
+            std::cout << "Connections (" << connections.size() << "):" << std::endl;
+            for (const Connection& conn : connections) {
+                std::cout << "  " << conn.getFrom().toStdString() << " -> " << conn.getTo().toStdString();
+                std::cout << " [pos:" << conn.getPosition() << "]" << std::endl;
+
+                // Выводим векторы с правильными пояснениями
+                std::cout << "    Positive vector (TO " << conn.getTo().toStdString() << "): ";
+                for (size_t i = 0; i < conn.getPositiveVectorSize() && i < 16; ++i) {
+                    if (conn.getPositiveBit(i)) {
+                        std::cout << "1";
+                    } else {
+                        std::cout << "0";
+                    }
+                }
+                std::cout << std::endl;
+
+                std::cout << "    Negative vector (FROM " << conn.getFrom().toStdString() << "): ";
+                for (size_t i = 0; i < conn.getNegativeVectorSize() && i < 16; ++i) {
+                    if (conn.getNegativeBit(i)) {
+                        std::cout << "1";
+                    } else {
+                        std::cout << "0";
+                    }
+                }
+                std::cout << std::endl;
+
+            }
+
+            // Выводим все элементы
+            QMap<QString, TreeElement*> elements = tree->getElements();
+            std::cout << "Elements (" << elements.size() << "):" << std::endl;
+            for (auto elem_it = elements.constBegin(); elem_it != elements.constEnd(); ++elem_it) {
+                TreeElement* element = elem_it.value();
+                std::cout << "  " << elem_it.key().toStdString()
+                          << " [type:" << element->getTypeName().toStdString()
+                          << ", pos:" << element->getPosition()
+                          << "]" << std::endl;
+            }
+
+            // Решаем CNF для этого дерева
+            bool tree_has_leak = solveCNF(tree);
+            if (tree_has_leak) {
+                std::cout << "🚨 WARNING: Potential memory leak detected in tree '"
+                          << tree->getName().toStdString() << "' at row " << clause_id << std::endl;
+                any_leak_detected = true;
+                has_memory_leak_ = true;
+            } else {
+                std::cout << "✅ No memory leak detected in tree '"
+                          << tree->getName().toStdString() << "' at row " << clause_id << std::endl;
             }
         }
-    }
-    throw std::runtime_error("No set bit found in BoolVector");
-}
 
-void printCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements) {
-    // Создаем обратное отображение позиций в имена переменных
-    QHash<int, QString> varNames;
-    for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
-        int pos = it.value()["position"].toInt();
-        varNames[pos] = it.key();
-    }
-
-    std::cout << "КНФ в формате DIMACS:\n";
-    std::cout << "c Сгенерированная КНФ-формула\n";
-
-    // Подсчет количества переменных и клауз
-    int varCount = elements.size();
-    int clauseCount = 0;
-    CNFClause* current = head;
-    while (current) {
-        clauseCount++;
-        current = current->next;
-    }
-
-    std::cout << "p cnf " << varCount << " " << clauseCount << "\n";
-
-    // Вывод всех клауз
-    current = head;
-    while (current) {
-        // Положительные литералы
-        for (size_t i = 0; i < current->positiveVars.size(); ++i) {
-            if (current->positiveVars.getBit(i)) {
-                std::cout << (i+1) << " "; // DIMACS использует 1-based индексацию
-            }
-        }
-
-        // Отрицательные литералы
-        for (size_t i = 0; i < current->negativeVars.size(); ++i) {
-            if (current->negativeVars.getBit(i)) {
-                std::cout << "-" << (i+1) << " "; // Отрицание в DIMACS
-            }
-        }
-
-        std::cout << "0\n"; // Конец клаузы
-        current = current->next;
-    }
-
-    // Дополнительный вывод с именами переменных
-    std::cout << "\nСоответствие переменных:\n";
-    for (int i = 1; i < varCount + 1; ++i) {
-        if (varNames.contains(i)) {
-            std::cout << (i+1) << " -> " << varNames[i].toStdString() << "\n";
+        if (any_leak_detected) {
+            std::cout << "\n🚨 OVERALL: Memory leak detected at row " << clause_id << std::endl;
         } else {
-            std::cout << (i+1) << " -> N" << (i - elements.size()) << "\n";
+            std::cout << "\n✅ OVERALL: No memory leaks detected at row " << clause_id << std::endl;
+        }
+
+        if (has_error_) {
+            std::cout << "❌ Error: Parsing error at row: " << clause_id << std::endl;
+            return false;
+        }
+
+        std::cout << "=== Completed row " << clause_id << " ===\n" << std::endl;
+    }
+
+    // Финальная проверка всех деревьев
+    std::cout << "=== Final Analysis of ALL Trees ===" << std::endl;
+    QMap<QString, Tree*> all_trees = treeManager_->getAllTrees();
+    std::cout << "Total trees: " << all_trees.size() << std::endl;
+
+    for (auto it = all_trees.constBegin(); it != all_trees.constEnd(); ++it) {
+        Tree* tree = it.value();
+        std::cout << "\n--- Final state of tree: " << tree->getName().toStdString() << " ---" << std::endl;
+        std::cout << "Elements: " << tree->getElementCount() << std::endl;
+        std::cout << "Connections: " << tree->getConnectionCount() << std::endl;
+        std::cout << "Valid: " << (tree->isValid() ? "Yes" : "No") << std::endl;
+
+        // Финальная проверка CNF
+        bool final_leak = solveCNF(tree);
+        if (final_leak) {
+            std::cout << "🚨 FINAL WARNING: Memory leak in tree '"
+                      << tree->getName().toStdString() << "'" << std::endl;
+            has_memory_leak_ = true;
+        } else {
+            std::cout << "✅ FINAL: No memory leak in tree '"
+                      << tree->getName().toStdString() << "'" << std::endl;
+        }
+    }
+
+    if (has_memory_leak_) {
+        std::cout << "\n🚨 FINAL RESULT: Memory leaks detected in the program" << std::endl;
+    } else {
+        std::cout << "\n✅ FINAL RESULT: No memory leaks detected" << std::endl;
+    }
+
+    return true;
+}
+void Parser_JSON::processBody(const QJsonValue& body_value, Tree* current_tree, int clause_id)
+{
+    if (body_value.isObject()) {
+        QJsonObject body_obj = body_value.toObject();
+
+        if (body_obj.contains("variable")) {
+            QString var_name = body_obj["variable"].toString();
+
+            TreeElement* element = findOrCreateElement(current_tree, var_name, "Variable");
+
+            if (body_obj.contains("value")) {
+                QJsonValue val = body_obj["value"];
+
+                if (val.isNull()) {
+                    return;
+                } else if (val.isString() && val.toString() == "malloc") {
+                    handleMalloc(current_tree, var_name, clause_id);
+                } else if (val.isString() && val.toString() == "free") {
+                    handleFree(current_tree, var_name);
+                } else if (val.isObject()) {
+                    processNestedValue(val.toObject(), current_tree, var_name, clause_id);
+                }
+            } else if (body_obj.contains("field")) {
+                processStructureField(body_obj["field"], current_tree, var_name, clause_id);
+            }
+        } else if (body_obj.contains("operation")) {
+            processOperation(body_obj["operation"].toObject(), current_tree, clause_id);
+        }
+    } else if (body_value.isArray()) {
+        QJsonArray body_array = body_value.toArray();
+        for (const QJsonValue& item : body_array) {
+            processBody(item, current_tree, clause_id);
         }
     }
 }
 
-void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& elements, bool& error) {
+void Parser_JSON::processBranch(const QJsonObject& branch_obj, Tree* current_tree, int clause_id)
+{
+    if (branch_obj.contains("body")) {
+        processBody(branch_obj["body"], current_tree, clause_id);
+    }
+}
+
+void Parser_JSON::processOperation(const QJsonObject& op_object, Tree* current_tree, int clause_id)
+{
+    if (!op_object.contains("op")) {
+        has_error_ = true;
+        return;
+    }
+
+    QString op_type = op_object["op"].toString();
+
+    if (op_type == "loop") {
+        processLoop(op_object, current_tree, clause_id);
+    } else {
+        if (op_object.contains("branch true")) {
+            QJsonValue branch_true = op_object["branch true"];
+            if (branch_true.isObject()) {
+                processBranch(branch_true.toObject(), current_tree, clause_id);
+            }
+        }
+
+        if (op_object.contains("branch false")) {
+            QJsonValue branch_false = op_object["branch false"];
+            if (branch_false.isObject()) {
+                processBranch(branch_false.toObject(), current_tree, clause_id);
+            }
+        }
+    }
+}
+
+void Parser_JSON::processLoop(const QJsonObject& loop_object, Tree* current_tree, int clause_id)
+{
+    if (!loop_object.contains("condition") || !loop_object.contains("body")) {
+        has_error_ = true;
+        std::cout << "Error: Loop missing condition or body" << std::endl;
+        return;
+    }
+
+    // Обрабатываем тело цикла как одну итерацию
+    std::cout << "Warning: Loop processed as single iteration" << std::endl;
+    processBody(loop_object["body"], current_tree, clause_id);
+}
+
+void Parser_JSON::processStructureField(const QJsonValue& field_value,
+                                        Tree* current_tree,
+                                        const QString& var_name,
+                                        int clause_id)
+{
+    if (!field_value.isObject()) {
+        std::cout << "Error: Field value is not an object" << std::endl;
+        has_error_ = true;
+        return;
+    }
+
+    QJsonObject field_obj = field_value.toObject();
+    QString current_var_name = var_name;
+
+    // УДАЛЯЕМ СВЯЗИ С КОРНЕМ для исходной переменной
+    removeRootLinkClauses(current_tree, current_tree->getName(), var_name);
+
+    if (field_obj.contains("f")) {
+        QJsonValue f_value = field_obj["f"];
+        if (f_value.isString()) {
+            // Переходим по полю (left или right) и получаем целевую переменную
+            QString target_var_name = navigateByField(current_tree, current_var_name, f_value.toString(), clause_id);
+            if (target_var_name.isEmpty()) {
+                std::cout << "Error: Failed to navigate to field '" << f_value.toString().toStdString()
+                          << "' from '" << current_var_name.toStdString() << "'" << std::endl;
+                return;
+            }
+            current_var_name = target_var_name;
+            std::cout << "Successfully navigated to: " << current_var_name.toStdString() << std::endl;
+
+            // УДАЛЯЕМ СВЯЗИ С КОРНЕМ для целевой переменной (на всякий случай)
+            removeRootLinkClauses(current_tree, current_tree->getName(), current_var_name);
+        }
+    }
+
+    TreeElement* element = current_tree->findElement(current_var_name);
+    if (!element) {
+        std::cout << "Error: Element '" << current_var_name.toStdString() << "' not found after navigation" << std::endl;
+        has_error_ = true;
+        return;
+    }
+
+    if (field_obj.contains("value")) {
+        QJsonValue value = field_obj["value"];
+
+        if (value.isNull()) {
+            std::cout << "Field value is null, skipping" << std::endl;
+            return;
+        } else if (value.isString() && value.toString() == "malloc") {
+            std::cout << "Executing malloc for: " << current_var_name.toStdString() << std::endl;
+            handleMalloc(current_tree, current_var_name, clause_id);
+        } else if (value.isString() && value.toString() == "free") {
+            std::cout << "Executing free for: " << current_var_name.toStdString() << std::endl;
+            handleFree(current_tree, current_var_name);
+        } else if (value.isObject()) {
+            std::cout << "Processing nested value for: " << current_var_name.toStdString() << std::endl;
+            processNestedValue(value.toObject(), current_tree, current_var_name, clause_id);
+        }
+    } else {
+        std::cout << "No value specified for field, navigation completed" << std::endl;
+    }
+}
+
+QString Parser_JSON::navigateByField(Tree* tree, const QString& current_name, const QString& field_direction, int clause_id)
+{
+    TreeElement* current_element = tree->findElement(current_name);
+    if (!current_element) {
+        std::cout << "Error: Current element '" << current_name.toStdString() << "' not found" << std::endl;
+        has_error_ = true;
+        return QString();
+    }
+
+    std::cout << "Looking for " << field_direction.toStdString() << " field from " << current_name.toStdString() << std::endl;
+
+    // Определяем нужный тип в зависимости от направления
+    int required_type;
+    if (field_direction == "left") {
+        required_type = TreeElement::LEFT_VARIABLE;
+    } else if (field_direction == "right") {
+        required_type = TreeElement::RIGHT_VARIABLE;
+    } else {
+        std::cout << "Error: Unknown field direction '" << field_direction.toStdString() << "'" << std::endl;
+        has_error_ = true;
+        return QString();
+    }
+
+    // Ищем среди всех элементов дерева подходящий элемент нужного типа
+    QMap<QString, TreeElement*> all_elements = tree->getElements();
+
+    for (auto it = all_elements.constBegin(); it != all_elements.constEnd(); ++it) {
+        TreeElement* element = it.value();
+
+        if (element->getType() == required_type) {
+            std::cout << "Found existing " << field_direction.toStdString()
+                      << " element: " << it.key().toStdString()
+                      << " [type: " << element->getTypeName().toStdString()
+                      << ", pos: " << element->getPosition() << "]" << std::endl;
+
+            // УДАЛЯЕМ СВЯЗИ С КОРНЕМ для найденного элемента
+            removeRootLinkClauses(tree, tree->getName(), it.key());
+
+            return it.key();
+        }
+    }
+
+    // Если не нашли подходящий элемент - это ошибка
+    std::cout << "Error: No " << field_direction.toStdString()
+              << " variable found for element '" << current_name.toStdString() << "'" << std::endl;
+    has_error_ = true;
+    return QString();
+}
+
+void Parser_JSON::processNestedValue(const QJsonObject& value_obj,
+                                     Tree* current_tree,
+                                     const QString& var_name,
+                                     int clause_id)
+{
+    if (!value_obj.contains("variable")) {
+        std::cout << "Error: Nested value missing 'variable' field" << std::endl;
+        has_error_ = true;
+        return;
+    }
+
+    QString nested_var_name = value_obj["variable"].toString();
+    std::cout << "Processing nested variable assignment: " << var_name.toStdString()
+              << " = " << nested_var_name.toStdString() << std::endl;
+
+    TreeElement* target_element = current_tree->findElement(var_name);
+    if (!target_element) {
+        std::cout << "Error: Target element '" << var_name.toStdString() << "' not found" << std::endl;
+        has_error_ = true;
+        return;
+    }
+
+    // Удаляем связи с корнем для целевого элемента
+    removeRootLinkClauses(current_tree, current_tree->getName(), var_name);
+
+    // Проверяем, существует ли nested_var_name в текущем дереве
+    TreeElement* source_element = current_tree->findElement(nested_var_name);
+
+    if (source_element) {
+        // Если переменная существует в текущем дереве - создаем связь между ними
+        std::cout << "Creating connection within same tree: " << var_name.toStdString()
+                  << " -> " << nested_var_name.toStdString() << std::endl;
+
+        BoolVector pos_vec(max_bytes_count_ * 8);
+        BoolVector neg_vec(max_bytes_count_ * 8);
+
+        pos_vec.setBit(source_element->getPosition());  // TO: source (положительный)
+        neg_vec.setBit(target_element->getPosition());  // FROM: target (отрицательный)
+
+        Connection* conn = new Connection(var_name, nested_var_name, pos_vec, neg_vec, clause_id);
+        current_tree->addConnection(*conn);
+        delete conn;
+
+    } else {
+        // Если переменная не найдена в текущем дереве, проверяем другие деревья
+        Tree* source_tree = treeManager_->getTree(nested_var_name);
+        if (source_tree && source_tree != current_tree) {
+            // ОБЪЕДИНЯЕМ деревья
+            std::cout << "Merging tree '" << source_tree->getName().toStdString()
+                      << "' into '" << current_tree->getName().toStdString() << "'" << std::endl;
+            mergeTrees(current_tree, source_tree);
+
+            // После объединения создаем связь между элементами
+            TreeElement* merged_element = current_tree->findElement(nested_var_name);
+            if (merged_element) {
+                BoolVector pos_vec(max_bytes_count_ * 8);
+                BoolVector neg_vec(max_bytes_count_ * 8);
+
+                pos_vec.setBit(merged_element->getPosition());  // TO: source (положительный)
+                neg_vec.setBit(target_element->getPosition());  // FROM: target (отрицательный)
+
+                Connection* conn = new Connection(var_name, nested_var_name, pos_vec, neg_vec, clause_id);
+                current_tree->addConnection(*conn);
+                delete conn;
+
+                std::cout << "✅ Created connection after merge: " << var_name.toStdString()
+                          << " -> " << nested_var_name.toStdString() << std::endl;
+            }
+        } else {
+            std::cout << "Error: Source variable '" << nested_var_name.toStdString() << "' not found" << std::endl;
+            has_error_ = true;
+            return;
+        }
+    }
+
+    // Обрабатываем поле, если оно есть
+    if (value_obj.contains("field")) {
+        QString current_name = nested_var_name;
+        processValueField(value_obj["field"], current_tree, current_name, 1);
+    }
+}
+
+void Parser_JSON::processValueField(const QJsonValue& field_value,
+                                    Tree* current_tree,
+                                    QString& last_name,
+                                    int nesting_level)
+{
+    if (!field_value.isObject()) {
+        has_error_ = true;
+        return;
+    }
+
+    QJsonObject field_obj = field_value.toObject();
+
+    if (field_obj.contains("f")) {
+        QJsonValue f_value = field_obj["f"];
+        if (f_value.isString()) {
+            // Рекурсивно переходим по полям (только по существующим элементам)
+            for (int i = 0; i < nesting_level; ++i) {
+                QString target_name = navigateByField(current_tree, last_name, f_value.toString(), -1);
+                if (target_name.isEmpty()) {
+                    std::cout << "Error: Failed to navigate in processValueField at level " << i << std::endl;
+                    has_error_ = true;
+                    return;
+                }
+                last_name = target_name;
+                std::cout << "Recursive navigation level " << i << ": now at " << last_name.toStdString() << std::endl;
+            }
+        }
+    }
+}
+
+void Parser_JSON::handleMalloc(Tree* current_tree, const QString& var_name, int clause_id)
+{
+    TreeElement* element = current_tree->findElement(var_name);
+    if (!element) {
+        has_error_ = true;
+        return;
+    }
+
+    // 1. Проверяем и удаляем связь с корнем, если она существует
+    removeRootLinkClauses(current_tree, current_tree->getName(), var_name);
+
+    // 2. Создаем первую memory variable
+    QString mem_name = "N" + QString::number(memory_var_index_++);
+    TreeElement* mem_element = new TreeElement(mem_name, TreeElement::MEMORY, current_position_++);
+    current_tree->addElement(mem_name, mem_element);
+
+    // УДАЛЯЕМ СВЯЗИ С КОРНЕМ для новой memory variable
+    removeRootLinkClauses(current_tree, current_tree->getName(), mem_name);
+
+    // Создаем соединение: var_name -> mem_name
+    BoolVector pos_vec(max_bytes_count_ * 8);
+    BoolVector neg_vec(max_bytes_count_ * 8);
+
+    pos_vec.setBit(mem_element->getPosition());  // TO: mem_name (положительный)
+    neg_vec.setBit(element->getPosition());      // FROM: var_name (отрицательный)
+
+    Connection* conn = new Connection(var_name, mem_name, pos_vec, neg_vec, clause_id);
+    current_tree->addConnection(*conn);
+    delete conn;
+
+    max_bytes_count_ = std::max(max_bytes_count_, BoolVector::calculateBytes(current_position_));
+
+    // 3. Создаем два дополнительных элемента с соответствующими типами
+    QString left_child_name = "N" + QString::number(memory_var_index_++);
+    QString right_child_name = "N" + QString::number(memory_var_index_++);
+
+    TreeElement* left_child = new TreeElement(left_child_name, TreeElement::LEFT_VARIABLE, current_position_++);
+    TreeElement* right_child = new TreeElement(right_child_name, TreeElement::RIGHT_VARIABLE, current_position_++);
+
+    current_tree->addElement(left_child_name, left_child);
+    current_tree->addElement(right_child_name, right_child);
+
+    // 4. Создаем связи: mem_name -> left_child и mem_name -> right_child
+    BoolVector pos_vec1(max_bytes_count_ * 8);
+    BoolVector neg_vec1(max_bytes_count_ * 8);
+    pos_vec1.setBit(left_child->getPosition());        // TO: left_child (положительный)
+    neg_vec1.setBit(mem_element->getPosition());       // FROM: mem_name (отрицательный)
+
+    Connection* conn1 = new Connection(mem_name, left_child_name, pos_vec1, neg_vec1, clause_id);
+    current_tree->addConnection(*conn1);
+    delete conn1;
+
+    BoolVector pos_vec2(max_bytes_count_ * 8);
+    BoolVector neg_vec2(max_bytes_count_ * 8);
+    pos_vec2.setBit(right_child->getPosition());       // TO: right_child (положительный)
+    neg_vec2.setBit(mem_element->getPosition());       // FROM: mem_name (отрицательный)
+
+    Connection* conn2 = new Connection(mem_name, right_child_name, pos_vec2, neg_vec2, clause_id);
+    current_tree->addConnection(*conn2);
+    delete conn2;
+
+    // 5. Создаем связи: left_child -> root и right_child -> root
+    TreeElement* root_element = current_tree->getRoot();
+    if (root_element) {
+        // left_child -> root
+        BoolVector root_pos_vec1(max_bytes_count_ * 8);
+        BoolVector root_neg_vec1(max_bytes_count_ * 8);
+        root_pos_vec1.setBit(root_element->getPosition()); // TO: root (положительный)
+        root_neg_vec1.setBit(left_child->getPosition());   // FROM: left_child (отрицательный)
+
+        Connection* root_conn1 = new Connection(left_child_name, current_tree->getName(),
+                                                root_pos_vec1, root_neg_vec1, clause_id);
+        current_tree->addConnection(*root_conn1);
+        delete root_conn1;
+
+        // right_child -> root
+        BoolVector root_pos_vec2(max_bytes_count_ * 8);
+        BoolVector root_neg_vec2(max_bytes_count_ * 8);
+        root_pos_vec2.setBit(root_element->getPosition()); // TO: root (положительный)
+        root_neg_vec2.setBit(right_child->getPosition());  // FROM: right_child (отрицательный)
+
+        Connection* root_conn2 = new Connection(right_child_name, current_tree->getName(),
+                                                root_pos_vec2, root_neg_vec2, clause_id);
+        current_tree->addConnection(*root_conn2);
+        delete root_conn2;
+    }
+
+    max_bytes_count_ = std::max(max_bytes_count_, BoolVector::calculateBytes(current_position_));
+
+    std::cout << "Malloc: " << var_name.toStdString() << " -> " << mem_name.toStdString()
+              << " with left: " << left_child_name.toStdString()
+              << ", right: " << right_child_name.toStdString()
+              << " at position " << clause_id << std::endl;
+}
+
+Connection* Parser_JSON::findOrCreateConnection(Tree* tree, const QString& from, const QString& to, int position)
+{
+    // Перед созданием проверяем и удаляем возможные связи с корнем для обоих элементов
+    removeRootLinkClauses(tree, tree->getName(), from);
+    removeRootLinkClauses(tree, tree->getName(), to);
+
+    Connection* conn = tree->findConnection(from, to);
+    if (!conn) {
+        BoolVector pos_vec(max_bytes_count_ * 8);
+        BoolVector neg_vec(max_bytes_count_ * 8);
+        Connection new_conn(from, to, pos_vec, neg_vec, position);
+        tree->addConnection(new_conn);
+        conn = tree->findConnection(from, to);
+    }
+    return conn;
+}
+
+bool Parser_JSON::solveCNF(Tree* tree)
+{
+    if (!tree) return false;
+
     Minisat::Solver solver;
+
     // Находим максимальную позицию среди элементов
     size_t maxPos = 0;
-    for (const auto& elem : elements) {
-        size_t pos = elem["position"].toUInt();
+    QMap<QString, TreeElement*> elements = tree->getElements();
+    for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
+        size_t pos = it.value()->getPosition();
         if (pos > maxPos) maxPos = pos;
     }
-    size_t totalVariables = maxPos + 1; // +1 потому что позиции начинаются с 0
+    size_t totalVariables = maxPos + 1;
 
     // Создаем переменные в решателе
     std::vector<Minisat::Var> vars(totalVariables);
@@ -150,24 +692,25 @@ void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
         vars[i] = solver.newVar();
     }
 
-    CNFClause* current = head;
-    while (current) {
+    // Преобразуем соединения в клаузы Minisat
+    QList<Connection> connections = tree->getConnections();
+    for (const Connection& conn : connections) {
         Minisat::vec<Minisat::Lit> clause;
 
-        // Обрабатываем положительные литералы (биты с 1)
-        for (size_t i = 1; i <= current->positiveVars.size(); ++i) {
-            if (current->positiveVars.getBit(i-1)) { // getBit использует 0-based индекс
-                if (i-1 < totalVariables) { // Проверяем границы
-                    clause.push(Minisat::mkLit(vars[i-1], false));
+        // Обрабатываем положительные литералы
+        for (size_t i = 0; i < conn.getPositiveVectorSize(); ++i) {
+            if (conn.getPositiveBit(i)) {
+                if (i < totalVariables) {
+                    clause.push(Minisat::mkLit(vars[i], false));
                 }
             }
         }
 
-        // Обрабатываем отрицательные литералы (биты с 1)
-        for (size_t i = 1; i <= current->negativeVars.size(); ++i) {
-            if (current->negativeVars.getBit(i-1)) {
-                if (i-1 < totalVariables) {
-                    clause.push(Minisat::mkLit(vars[i-1], true));
+        // Обрабатываем отрицательные литералы
+        for (size_t i = 0; i < conn.getNegativeVectorSize(); ++i) {
+            if (conn.getNegativeBit(i)) {
+                if (i < totalVariables) {
+                    clause.push(Minisat::mkLit(vars[i], true));
                 }
             }
         }
@@ -175,486 +718,346 @@ void solveCNF(CNFClause* head, const QHash<QString, QHash<QString, QVariant>>& e
         if (clause.size() > 0) {
             solver.addClause(clause);
         }
-        current = current->next;
     }
 
-    // Добавляем тестовые клаузы (без позиции 0)
-    Minisat::vec<Minisat::Lit> allPos, allNeg;
-    for (size_t i = 1; i < totalVariables; ++i) {
-        allPos.push(Minisat::mkLit(vars[i], false));
-        allNeg.push(Minisat::mkLit(vars[i], true));
+    // Добавляем тестовые клаузы (все переменные должны быть true или false)
+    Minisat::vec<Minisat::Lit> allPositive, allNegative;
+    for (size_t i = 0; i < totalVariables; ++i) {
+        // Проверяем, используется ли переменная в каких-либо соединениях
+        bool used = false;
+        for (const Connection& conn : connections) {
+            if ((i < conn.getPositiveVectorSize() && conn.getPositiveBit(i)) ||
+                (i < conn.getNegativeVectorSize() && conn.getNegativeBit(i))) {
+                used = true;
+                break;
+            }
+        }
+
+        if (used) {
+            allPositive.push(Minisat::mkLit(vars[i], false));
+            allNegative.push(Minisat::mkLit(vars[i], true));
+        }
     }
 
-    if (allPos.size() > 0) solver.addClause(allPos);
-    if (allNeg.size() > 0) solver.addClause(allNeg);
+    if (allPositive.size() > 0) solver.addClause(allPositive);
+    if (allNegative.size() > 0) solver.addClause(allNegative);
 
-    if (solver.solve()) {
-        std::cout << "Решение найдено:\n";
+    // Решаем CNF
+    bool result = solver.solve();
+
+    if (result) {
+        std::cout << "=== Solution found for tree '" << tree->getName().toStdString() << "' ===" << std::endl;
         for (size_t i = 0; i < totalVariables; ++i) {
-            // Пропускаем вывод, если переменная не используется
+            // Проверяем, используется ли переменная
             bool used = false;
-            CNFClause* tmp = head;
-            while (tmp) {
-                if ((i < tmp->positiveVars.size() && tmp->positiveVars.getBit(i)) ||
-                    (i < tmp->negativeVars.size() && tmp->negativeVars.getBit(i))) {
+            for (const Connection& conn : connections) {
+                if ((i < conn.getPositiveVectorSize() && conn.getPositiveBit(i)) ||
+                    (i < conn.getNegativeVectorSize() && conn.getNegativeBit(i))) {
                     used = true;
                     break;
                 }
-                tmp = tmp->next;
             }
 
             if (used) {
-                Minisat::lbool val = solver.modelValue(vars[i]);
-                std::cout << "x" << i << " = " << (val == Minisat::lbool((uint8_t)0)) << "\n";
+                Minisat::lbool value = solver.modelValue(vars[i]);
+                // Находим имя переменной по позиции
+                QString var_name = "Unknown";
+                for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
+                    if (it.value()->getPosition() == (int)i) {
+                        var_name = it.key();
+                        break;
+                    }
+                }
+                std::cout << var_name.toStdString() << " (x" << i << ") = "
+                          << (value == Minisat::lbool((uint8_t)0) ? "true" : "false") << std::endl;
             }
         }
-        error = true;
+        std::cout << "=== End of solution ===" << std::endl;
     } else {
-        error = false;
+        std::cout << "=== No solution found for tree '" << tree->getName().toStdString() << "' ===" << std::endl;
     }
+
+    return result;
 }
 
-void printElements(const QHash<QString, QHash<QString, QVariant>>& elements) {
-    qDebug() << "----------------------------------";
+void Parser_JSON::handleFree(Tree* current_tree, const QString& var_name)
+{
+    TreeElement* element = current_tree->findElement(var_name);
+    if (!element) {
+        has_error_ = true;
+        return;
+    }
+
+    // 1. Проверяем и удаляем связь с корнем, если она существует
+    removeRootLinkClauses(current_tree, current_tree->getName(), var_name);
+
+    // 2. Находим и удаляем все соединения, связанные с этой переменной
+    QList<Connection> connections_from = current_tree->getConnectionsFrom(var_name);
+    QList<Connection> connections_to = current_tree->getConnectionsTo(var_name);
+
+    for (const Connection& conn : connections_from) {
+        current_tree->removeConnection(conn.getFrom(), conn.getTo());
+
+        // Если соединение ведет к memory variable, рекурсивно освобождаем и её
+        if (conn.getTo().startsWith("N")) {
+            handleFree(current_tree, conn.getTo());
+        }
+    }
+
+    for (const Connection& conn : connections_to) {
+        current_tree->removeConnection(conn.getFrom(), conn.getTo());
+    }
+
+    // 3. Удаляем сам элемент
+    current_tree->removeElement(var_name);
+
+    std::cout << "Free: " << var_name.toStdString() << std::endl;
+}
+
+void Parser_JSON::mergeTrees(Tree* target_tree, Tree* source_tree)
+{
+    if (!target_tree || !source_tree || target_tree == source_tree) {
+        return;
+    }
+
+    std::cout << "🔄 Merging tree '" << source_tree->getName().toStdString()
+              << "' into '" << target_tree->getName().toStdString() << "'" << std::endl;
+
+    TreeElement* target_root = target_tree->getRoot();
+    if (!target_root) {
+        std::cout << "Error: Target tree has no root" << std::endl;
+        return;
+    }
+
+    // 1. Копируем элементы из source в target
+    QMap<QString, TreeElement*> source_elements = source_tree->getElements();
+    for (auto it = source_elements.constBegin(); it != source_elements.constEnd(); ++it) {
+        // Пропускаем корневой элемент source tree, если он уже существует
+        if (it.key() == source_tree->getName() && target_tree->findElement(it.key())) {
+            continue;
+        }
+
+        TreeElement* new_element = new TreeElement(*(it.value()));
+        target_tree->addElement(it.key(), new_element);
+        std::cout << "  Copied element: " << it.key().toStdString() << std::endl;
+    }
+
+    // 2. Копируем соединения
+    QList<Connection> source_connections = source_tree->getConnections();
+    for (const Connection& conn : source_connections) {
+        target_tree->addConnection(conn);
+        std::cout << "  Copied connection: " << conn.getFrom().toStdString()
+                  << " -> " << conn.getTo().toStdString() << std::endl;
+    }
+
+    // 3. НАХОДИМ ЭЛЕМЕНТЫ source дерева, которые имеют связь с корнем source
+    QList<QString> elements_with_root_connection = findElementsWithRootConnection(source_tree);
+    std::cout << "  Found " << elements_with_root_connection.size()
+              << " elements with root connection in source tree: ";
+    for (const QString& elem : elements_with_root_connection) {
+        std::cout << elem.toStdString() << " ";
+    }
+    std::cout << std::endl;
+
+    // 4. ДОБАВЛЯЕМ СВЯЗИ от этих элементов к корню TARGET дерева
+    for (const QString& elem_name : elements_with_root_connection) {
+        TreeElement* element = target_tree->findElement(elem_name);
+        if (element && elem_name != source_tree->getName()) { // Не связываем корень source с корнем target
+            // Создаем связь от элемента source дерева к корню TARGET дерева
+            BoolVector pos_vec(max_bytes_count_ * 8);
+            BoolVector neg_vec(max_bytes_count_ * 8);
+
+            pos_vec.setBit(target_root->getPosition());  // TO: target root (root1) - положительный
+            neg_vec.setBit(element->getPosition());      // FROM: элемент - отрицательный
+
+            Connection* conn = new Connection(elem_name, target_tree->getName(),
+                                              pos_vec, neg_vec, -1); // -1 для объединительных связей
+            target_tree->addConnection(*conn);
+            delete conn;
+
+            std::cout << "  Added element-to-target-root connection: " << elem_name.toStdString()
+                      << " -> " << target_tree->getName().toStdString() << std::endl;
+        }
+    }
+
+    // 5. Удаляем source tree из менеджера
+    treeManager_->removeTree(source_tree->getName());
+
+    std::cout << "✅ Successfully merged trees with root connections to target root" << std::endl;
+}
+
+// Вспомогательный метод для поиска элементов, которые имеют связь с корнем
+QList<QString> Parser_JSON::findElementsWithRootConnection(Tree* tree)
+{
+    QList<QString> elements;
+
+    if (!tree) return elements;
+
+    QString root_name = tree->getName();
+    QList<Connection> connections = tree->getConnections();
+
+    // Ищем элементы, которые имеют связь с корнем (в любую сторону)
+    for (const Connection& conn : connections) {
+        // Если связь от корня к элементу
+        if (conn.getFrom() == root_name) {
+            if (!elements.contains(conn.getTo())) {
+                elements.append(conn.getTo());
+            }
+        }
+        // Если связь от элемента к корню
+        if (conn.getTo() == root_name) {
+            if (!elements.contains(conn.getFrom())) {
+                elements.append(conn.getFrom());
+            }
+        }
+    }
+
+    // Добавляем отладочный вывод
+    std::cout << "    Elements with root connection in tree '" << root_name.toStdString() << "': ";
+    for (const QString& elem : elements) {
+        std::cout << elem.toStdString() << " ";
+    }
+    std::cout << std::endl;
+
+    return elements;
+}
+// Вспомогательный метод для поиска листьев в дереве
+QList<QString> Parser_JSON::findLeaves(Tree* tree)
+{
+    QList<QString> leaves;
+
+    if (!tree) return leaves;
+
+    QMap<QString, TreeElement*> elements = tree->getElements();
+    QSet<QString> has_outgoing_connections;
+
+    // Собираем все элементы, которые имеют исходящие соединения
+    QList<Connection> connections = tree->getConnections();
+    for (const Connection& conn : connections) {
+        has_outgoing_connections.insert(conn.getFrom());
+    }
+
+    // Листья - это элементы без исходящих соединений
+    QString root_name = tree->getName();
     for (auto it = elements.constBegin(); it != elements.constEnd(); ++it) {
-        const auto& props = it.value();
-        qDebug() << "Name:" << it.key()
-                 << "\n  Type:" << props["type"].toString()
-                 << "\n  Position:" << props["position"].toInt()
-                 << "\n  Memory:" << props["memory"].toString()
-                 << "\n----------------------------------";
+        if (!has_outgoing_connections.contains(it.key())) {
+            leaves.append(it.key());
+            std::cout << "    Leaf found: " << it.key().toStdString() << std::endl;
+        }
     }
+
+    return leaves;
 }
 
-void setElement(QHash<QString, QHash<QString, QVariant>>& elements,
-                const QString& name, const QString& type, int position) {
-    elements[name] = {
-        {"type", type},
-        {"position", position},
-        {"memory", "NULL"}
-    };
+TreeElement* Parser_JSON::findOrCreateElement(Tree* tree, const QString& name, const QString& type)
+{
+    TreeElement* element = tree->findElement(name);
+    if (!element) {
+        // Перед созданием проверяем и удаляем возможные связи с корнем
+        removeRootLinkClauses(tree, tree->getName(), name);
+
+        int type_code;
+        if (type == "Variable") {
+            type_code = TreeElement::ROOT; // Основные переменные становятся корнями
+        } else if (type == "Memory") {
+            type_code = TreeElement::MEMORY;
+        } else {
+            type_code = TreeElement::ROOT; // По умолчанию
+        }
+
+        element = new TreeElement(name, type_code, current_position_++);
+        tree->addElement(name, element);
+        max_bytes_count_ = std::max(max_bytes_count_, BoolVector::calculateBytes(current_position_));
+
+        std::cout << "Created element: " << name.toStdString() << " type: " << element->getTypeName().toStdString() << std::endl;
+    }
+    return element;
 }
 
-void processNestedVariable(QString& current_name, bool& error, const QString& fieldDirection) {
-    static QRegularExpression re("^N(\\d+)$");
-    QRegularExpressionMatch match = re.match(current_name);
+
+void Parser_JSON::processNestedVariable(QString& current_name, const QString& field_direction)
+{
+    static QRegularExpression regex("^N(\\d+)$");
+    QRegularExpressionMatch match = regex.match(current_name);
 
     if (!match.hasMatch()) {
-        error = true;
+        has_error_ = true;
         return;
     }
 
     int number = match.captured(1).toInt();
-    if (fieldDirection == "left")
+    if (field_direction == "left") {
         current_name = "N" + QString::number(number + 1);
-    else if (fieldDirection == "right")
+    } else if (field_direction == "right") {
         current_name = "N" + QString::number(number + 2);
-}
-
-void processValueField(const QJsonValue& fieldValue,
-                       QHash<QString, QHash<QString, QVariant>>& elements,
-                       QString& last_name, int nesting, bool& error,
-                       CNFClause& current, size_t max_bytes) {
-    if (!fieldValue.isObject()) {
-        error = true;
-        return;
-    }
-
-    QJsonObject fieldObj = fieldValue.toObject();
-    if (fieldObj.contains("f")) {
-        for (int i = 0; i < nesting; ++i) {
-            if (!elements.contains(last_name)) {
-                error = true;
-                return;
-            }
-            last_name = elements[last_name]["memory"].toString();
-        }
-        processNestedVariable(last_name, error, fieldObj["f"].toString());
-    }
-
-    if (elements.contains(last_name)) {
-        size_t position = elements[last_name]["position"].toInt();
-        current.setPositiveBit(position, "mem_var", max_bytes);
-    } else {
-        error = true;
     }
 }
 
-void handleMalloc(CNFClause& cnf, CNFClause& temp, int& memoryVarIndex, int& currentPosition,
-                  QHash<QString, QHash<QString, QVariant>>& elements,
-                  const QString& varName, int clauseId, int& isFirstClause, size_t& max_bytes, QString& rootName) {
-    elements[varName]["memory"] = "N" + QString::number(memoryVarIndex);
-    setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
-    size_t negative_bit_position = elements["N" + QString::number(memoryVarIndex)]["position"].toInt();
-    size_t parentId = elements[varName]["position"].toInt();
+void Parser_JSON::printElements() const
+{
+    QMap<QString, Tree*> all_trees = treeManager_->getAllTrees();
 
-    // Удаление старых клауз связывающих с корнем
-    size_t parentVarPos = elements[rootName]["position"].toInt();
-    CNFClause* prev = nullptr;
-    CNFClause* current = &cnf;
-    if (rootName != varName) {
-                removeRootLinkClauses(cnf, parentVarPos, parentId);
-    }
-    memoryVarIndex++;
-    currentPosition++;
-    CNFClause loop_cnf;
-    size_t rootID = elements[rootName]["position"].toInt();
-    // Добавление двух дочерних переменных
-    for (int i = 0; i < 2; ++i) {
-        setElement(elements, "N" + QString::number(memoryVarIndex), "mem_var", currentPosition);
-        temp.position = clauseId;
-        temp.setNegativeBit(negative_bit_position, "mem_var", max_bytes);
-        temp.setPositiveBit(currentPosition, "mem_var", max_bytes);
-        loop_cnf.setNegativeBit(currentPosition, "mem_var", max_bytes);
-        loop_cnf.setPositiveBit(rootID, "variable", max_bytes);
-        if (isFirstClause == 0) {
-            cnf = temp;
-            isFirstClause = 1;
-        } else {
-            cnf.addClause(temp);
+    for (auto it = all_trees.constBegin(); it != all_trees.constEnd(); ++it) {
+        Tree* tree = it.value();
+        std::cout << "=== Tree: " << tree->getName().toStdString() << " ===" << std::endl;
+
+        QMap<QString, TreeElement*> elements = tree->getElements();
+        for (auto elem_it = elements.constBegin(); elem_it != elements.constEnd(); ++elem_it) {
+            TreeElement* element = elem_it.value();
+            std::cout << "Element: " << elem_it.key().toStdString()
+                      << " Type: " << element->getType()
+                      << " Position: " << element->getPosition()
+                      << std::endl;
         }
 
-        cnf.addClause(loop_cnf);
-        loop_cnf = CNFClause();
-        // Сброс временной клаузы
-        temp = CNFClause();
-        memoryVarIndex++;
-        currentPosition++;
+        QList<Connection> connections = tree->getConnections();
+        for (const Connection& conn : connections) {
+            std::cout << "Connection: " << conn.getFrom().toStdString()
+                      << " -> " << conn.getTo().toStdString()
+                      << std::endl;
+        }
+        std::cout << "------------------------" << std::endl;
     }
 }
 
-//void delete_con_clauses()
+// Заглушки для методов, которые требуют дополнительной реализации
+void Parser_JSON::removeRootLinkClauses(Tree* tree, const QString& root_name, const QString& var_name)
+{
+    if (!tree) return;
 
-void processNestedValue(const QJsonObject& valueObj,
-                        QHash<QString, QHash<QString, QVariant>>& elements,
-                        CNFClause& currentClause, QString varName, bool& error, size_t& max_bytes) {
-    if (!valueObj.contains("variable")) {
-        error = true;
-        return;
-    }
+    TreeElement* root_element = tree->getRoot();
+    TreeElement* var_element = tree->findElement(var_name);
 
-    QString nestedVarName = valueObj["variable"].toString();
-    if (!elements.contains(nestedVarName)) {
-        error = true;
-        return;
-    }
+    if (!root_element || !var_element) return;
 
-    QString memRef = elements[nestedVarName]["memory"].toString();
-    if (memRef == "NULL") {
-        if (valueObj.contains("field")) {
-            error = true;
-            return;
-        }
-        size_t position = elements[nestedVarName]["position"].toInt();
-        currentClause.setPositiveBit(position, "variable", max_bytes);
-        return;
-    }
+    std::cout << "Checking root connections for: " << var_name.toStdString() << std::endl;
 
-    if (valueObj.contains("field")) {
-        int nesting = 1;
-        processValueField(valueObj["field"], elements, nestedVarName,
-                          nesting, error, currentClause, max_bytes);
-    } else {
-        size_t position = elements[memRef]["position"].toInt();
-        currentClause.setPositiveBit(position, "variable", max_bytes);
-    }
-}
+    // Ищем и удаляем все соединения между корнем и переменной в обе стороны
+    bool found_connections = false;
 
-void processStructureField(const QJsonValue& fieldValue, bool& error, QString& lastName,
-                           int& memoryVarIndex, int& nestingLevel,
-                           QHash<QString, QHash<QString, QVariant>>& elements,
-                           CNFClause& currentClause, int& currentPosition, size_t& max_bytes,
-                           CNFClause& cnf, int& isFirstClause, int clauseId, QString& rootName) {
-    if (!fieldValue.isObject()) {
-        error = true;
-        return;
-    }
-    QJsonObject fieldObj = fieldValue.toObject();
-    CNFClause temp;
-
-    // Обработка поля
-    if (fieldObj.contains("f")) {
-        QJsonValue fValue = fieldObj["f"];
-        if (fValue.isString()) {
-            for (int i = 0; i < nestingLevel; ++i) {
-                if (!elements.contains(lastName)) {
-                    error = true;
-                    return;
-                }
-                lastName = elements[lastName]["memory"].toString();
-            }
-            processNestedVariable(lastName, error, fValue.toString());
+    // Удаляем соединения от корня к переменной
+    QList<Connection> connections_from_root = tree->getConnectionsFrom(root_name);
+    for (const Connection& conn : connections_from_root) {
+        if (conn.getTo() == var_name) {
+            tree->removeConnection(conn.getFrom(), conn.getTo());
+            std::cout << "Removed root connection: " << root_name.toStdString()
+                      << " -> " << var_name.toStdString() << std::endl;
+            found_connections = true;
         }
     }
 
-    // Обработка значения
-    if (fieldObj.contains("value")) {
-        if (!elements.contains(lastName)) {
-            error = true;
-            return;
-        }
-
-        size_t varPosition = elements[lastName]["position"].toInt();
-        currentClause.setNegativeBit(varPosition, "mem_var", max_bytes);
-
-        QJsonValue value = fieldObj["value"];
-        if (value.isNull()) {
-            currentClause = CNFClause();
-            currentClause.position = -1;
-            return;
-            currentClause.setPositiveBit(0, "Variable", max_bytes);
-        }
-        else if (value.isString() && value.toString() == "malloc") {
-            currentClause.setPositiveBit(currentPosition, "mem_var", max_bytes);
-            handleMalloc(cnf, temp, memoryVarIndex, currentPosition, elements,
-                         lastName, clauseId, isFirstClause, max_bytes, rootName);
-        }
-        else if (value.isObject()) {
-            processNestedValue(value.toObject(), elements, currentClause, lastName, error, max_bytes);
-        }
-        return;
-    }
-
-    // Рекурсивная обработка операций
-    if (fieldObj.contains("op")) {
-        nestingLevel = 1;
-        processStructureField(fieldObj["op"], error, lastName, memoryVarIndex,
-                              nestingLevel, elements, currentClause, currentPosition,
-                              max_bytes, cnf, isFirstClause, clauseId, rootName);
-    }
-}
-
-void processOperation(const QJsonObject& opObj, bool& error,
-                      QHash<QString, QHash<QString, QVariant>>& elements,
-                      int& currentPosition, int& memoryVarIndex,
-                      CNFClause& currentClause, size_t& max_bytes,
-                      CNFClause& cnf, int& isFirstClause, int clauseId);
-
-void processBody(const QJsonValue& bodyValue, bool& error,
-                 QHash<QString, QHash<QString, QVariant>>& elements,
-                 int& currentPosition, int& memoryVarIndex,
-                 CNFClause& currentClause, size_t& max_bytes,
-                 CNFClause& cnf, int& isFirstClause, int clauseId) {
-    if (bodyValue.isObject()) {
-        QJsonObject bodyObj = bodyValue.toObject();
-        if (!bodyObj.contains("id"))
-            return;
-
-        int id = bodyObj["id"].toInt();
-        currentClause.position = id;
-        CNFClause temp;
-
-        if (bodyObj.contains("variable")) {
-            QString varName = bodyObj["variable"].toString();
-            QString rootName = varName;
-            if (!elements.contains(varName)) {
-                setElement(elements, varName, "Variable", currentPosition);
-                currentPosition++;
-            }
-
-            if (bodyObj.contains("value")) {
-                QJsonValue val = bodyObj["value"];
-                size_t position = elements[varName]["position"].toInt();
-
-                if (val.isNull()) {
-                    currentClause = CNFClause();
-                    currentClause.position = -1;
-                    return;
-                }
-                else if (val.isString() && val.toString() == "malloc") {
-                    currentClause.setNegativeBit(position, "Variable", max_bytes);
-                    currentClause.setPositiveBit(currentPosition, "mem_var", max_bytes);
-                    handleMalloc(cnf, temp, memoryVarIndex, currentPosition,
-                                 elements, varName, id, isFirstClause, max_bytes, rootName);
-                }
-                else if (val.isObject()) {
-                    currentClause.setNegativeBit(position, "Variable", max_bytes);
-                    processNestedValue(val.toObject(), elements, currentClause, varName, error, max_bytes);
-                }
-            }
-            else if (bodyObj.contains("field")) {
-                bool isValueFound = false;
-                int nesting = 1;
-                processStructureField(bodyObj["field"], error, varName, memoryVarIndex,
-                                      nesting, elements, currentClause, currentPosition,
-                                      max_bytes, cnf, isFirstClause, id, rootName);
-            }
-        }
-        else if (bodyObj.contains("operation")) {
-            processOperation(bodyObj["operation"].toObject(), error, elements,
-                             currentPosition, memoryVarIndex, currentClause,
-                             max_bytes, cnf, isFirstClause, id);
-        }
-    }
-    else if (bodyValue.isArray()) {
-        QJsonArray bodyArray = bodyValue.toArray();
-        for (const QJsonValue& item : bodyArray) {
-            processBody(item, error, elements, currentPosition, memoryVarIndex,
-                        currentClause, max_bytes, cnf, isFirstClause, clauseId);
-        }
-    }
-}
-
-void processBranch(const QJsonObject& branchObj, bool& error,
-                   QHash<QString, QHash<QString, QVariant>>& elements,
-                   int& currentPosition, int& memoryVarIndex,
-                   CNFClause& currentClause, size_t& max_bytes,
-                   CNFClause& cnf, int& isFirstClause, int clauseId) {
-    if (branchObj.contains("body")) {
-        processBody(branchObj["body"], error, elements, currentPosition,
-                    memoryVarIndex, currentClause, max_bytes, cnf, isFirstClause, clauseId);
-    }
-}
-
-void processOperation(const QJsonObject& opObj, bool& error,
-                      QHash<QString, QHash<QString, QVariant>>& elements,
-                      int& currentPosition, int& memoryVarIndex,
-                      CNFClause& currentClause, size_t& max_bytes,
-                      CNFClause& cnf, int& isFirstClause, int clauseId) {
-    if (!opObj.contains("op")) {
-        error = true;
-        return;
-    }
-
-    if (opObj.contains("branch true")) {
-        QJsonValue branchTrue = opObj["branch true"];
-        if (branchTrue.isObject()) {
-            processBranch(branchTrue.toObject(), error, elements, currentPosition,
-                          memoryVarIndex, currentClause, max_bytes, cnf, isFirstClause, clauseId);
+    // Удаляем соединения от переменной к корню
+    QList<Connection> connections_to_root = tree->getConnectionsTo(root_name);
+    for (const Connection& conn : connections_to_root) {
+        if (conn.getFrom() == var_name) {
+            tree->removeConnection(conn.getFrom(), conn.getTo());
+            std::cout << "Removed root connection: " << var_name.toStdString()
+                      << " -> " << root_name.toStdString() << std::endl;
+            found_connections = true;
         }
     }
 
-    if (opObj.contains("branch false")) {
-        QJsonValue branchFalse = opObj["branch false"];
-        if (branchFalse.isObject()) {
-            processBranch(branchFalse.toObject(), error, elements, currentPosition,
-                          memoryVarIndex, currentClause, max_bytes, cnf, isFirstClause, clauseId);
-        }
-    }
-}
-
-void parseJsonFile(const QString& filePath,
-                   QHash<QString, QHash<QString, QVariant>>& elements,
-                   bool& error, CNFClause& cnf, bool& memory_leak) {
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "Failed to open file:" << filePath;
-        error = true;
-        return;
-    }
-
-    QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
-    file.close();
-
-    if (doc.isNull()) {
-        qWarning() << "JSON parse error:" << parseError.errorString();
-        error = true;
-        return;
-    }
-
-    if (!doc.isObject()) {
-        qWarning() << "Invalid JSON structure";
-        error = true;
-        return;
-    }
-
-    QJsonObject rootObject = doc.object();
-    if (!rootObject.contains("code") || !rootObject["code"].isObject()) {
-        qWarning() << "Missing 'code' object";
-        error = true;
-        return;
-    }
-
-    QJsonObject codeObject = rootObject["code"].toObject();
-    if (!codeObject.contains("rows") || !codeObject["rows"].isArray()) {
-        qWarning() << "Missing 'rows' array";
-        error = true;
-        return;
-    }
-
-    size_t max_bytes = 1;
-    size_t current_bytes = 1;
-    int currentPosition = 1;
-    int memoryVarIndex = 0;
-    int isFirstClause = 0;
-    int clauseId;
-    QJsonArray rows = codeObject["rows"].toArray();
-    CNFClause temp;
-    for (const QJsonValue& row : rows) {
-        if (!row.isObject()) continue;
-
-        QJsonObject rowObj = row.toObject();
-        if (!rowObj.contains("id")) continue;
-
-        clauseId = rowObj["id"].toInt();
-        CNFClause currentClause;
-        currentClause.position = clauseId;
-        if (rowObj.contains("variable")) {
-            QString varName = rowObj["variable"].toString();
-            QString rootName = varName;
-            if (!elements.contains(varName)) {
-                setElement(elements, varName, "Variable", currentPosition);
-                currentPosition++;
-            }
-
-            if (rowObj.contains("value")) {
-                QJsonValue val = rowObj["value"];
-                size_t varPos = elements[varName]["position"].toInt();
-
-                if (val.isNull()) {
-                    currentClause = CNFClause();
-                    currentClause.position = -1;
-                    continue;
-                }
-                else if (val.isString() && val.toString() == "malloc") {
-                    currentClause.setNegativeBit(varPos, "Variable", max_bytes);
-                    currentClause.setPositiveBit(currentPosition, "mem_var", max_bytes);
-                    handleMalloc(cnf, temp, memoryVarIndex, currentPosition,
-                                 elements, varName, clauseId, isFirstClause, max_bytes, rootName);
-                }
-                else if (val.isObject()) {
-                    currentClause.setNegativeBit(varPos, "Variable", max_bytes);
-                    processNestedValue(val.toObject(), elements, currentClause, varName, error, max_bytes);
-                }
-            }
-            else if (rowObj.contains("field")) {
-                bool isValueFound = false;
-                int nestingLevel = 1;
-                processStructureField(rowObj["field"], error, varName, memoryVarIndex,
-                                      nestingLevel, elements, currentClause, currentPosition,
-                                      max_bytes, cnf, isFirstClause, clauseId, rootName);
-            }
-        }
-        else if (rowObj.contains("operation")) {
-            processOperation(rowObj["operation"].toObject(), error, elements,
-                             currentPosition, memoryVarIndex, currentClause,
-                             max_bytes, cnf, isFirstClause, clauseId);
-        }
-
-        if (isFirstClause == 0) {
-            cnf = currentClause;
-            isFirstClause = 1;
-        }
-        else if (currentClause.position == -1) {
-            continue;
-        }
-        else {
-            cnf.addClause(currentClause);
-        }
-
-        if (max_bytes > current_bytes) {
-            cnf.resizeAll(max_bytes);
-        }
-        solveCNF(&cnf,elements, memory_leak);
-        if (memory_leak) {
-            qCritical() << "Ошибка в памяти";
-            qCritical() << "Позиция: " << clauseId ;
-            return;
-        }
-        if (error) {
-            qCritical() << "Error:";
-            return;
-        }
+    if (!found_connections) {
+        std::cout << "No root connections found for: " << var_name.toStdString() << std::endl;
     }
 }
