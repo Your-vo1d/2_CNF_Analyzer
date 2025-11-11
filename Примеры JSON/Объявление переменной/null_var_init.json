@@ -4,7 +4,7 @@
             {
                 "id": 1,
                 "variable": "root",
-                "value": "Null"
+                "value": null
             }
         ]
     }
