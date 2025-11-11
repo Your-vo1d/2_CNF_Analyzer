@@ -1,0 +1,16 @@
+{
+    "code": {
+        "rows": [
+            {
+                "id": 1,
+                "variable": "root",
+                "value": "malloc"
+            },
+            {
+                "id": 12,
+                "variable": "root",
+                "value": "free"
+            }
+        ]
+    }
+}
