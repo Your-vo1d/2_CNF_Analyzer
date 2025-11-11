@@ -22,7 +22,6 @@ TreeElement& TreeElement::operator=(const TreeElement& other)
         name_ = other.name_;
         type_ = other.type_;
         position_ = other.position_;
-
     }
     return *this;
 }
@@ -32,12 +31,12 @@ QString TreeElement::getTypeName() const
     switch (type_) {
     case ROOT: return "ROOT";
     case MEMORY: return "MEMORY";
+    case NULL_ELEMENT: return "NULL_ELEMENT";
     case LEFT_VARIABLE: return "LEFT_VARIABLE";
     case RIGHT_VARIABLE: return "RIGHT_VARIABLE";
     default: return "UNKNOWN";
     }
 }
-
 
 bool TreeElement::operator==(const TreeElement& other) const
 {
