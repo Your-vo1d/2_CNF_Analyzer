@@ -1,0 +1,355 @@
+classDiagram
+    class BoolVector {
+        -std::vector~uint8_t~ data_
+        -size_t num_bits_
+        -size_t num_bytes_
+        +BoolVector()
+        +BoolVector(size_t bits_count)
+        +~BoolVector()
+        +BoolVector(const BoolVector& other)
+        +operator=(const BoolVector& other) BoolVector&
+        +print() void
+        +getBit(size_t bit_index) bool
+        +getData() const uint8_t*
+        +setBit(size_t bit_index) void
+        +clearBit(size_t bit_index) void
+        +isZero() bool
+        +size() size_t
+        +countBytes() size_t
+        +calculateBytes(size_t bits_count) size_t$
+        +resize(size_t new_bits_count) void
+    }
+
+    class TreeElement {
+        -QString name_
+        -int type_
+        -int position_
+        +TreeElement()
+        +TreeElement(QString name, int type, int position)
+        +TreeElement(const TreeElement& other)
+        +~TreeElement()
+        +operator=(const TreeElement& other) TreeElement&
+        +operator==(const TreeElement& other) bool
+        +operator!=(const TreeElement& other) bool
+        +getName() QString
+        +getType() int
+        +getPosition() int
+        +getTypeName() QString
+        +setName(QString name) void
+        +setType(int type) void
+        +setPosition(int position) void
+        +isValid() bool
+        +toString() QString
+        +isRoot() bool
+        +isMemory() bool
+        +isLeftVariable() bool
+        +isRightVariable() bool
+    }
+
+    class TreeElementType {
+        <<enumeration>>
+        ROOT
+        MEMORY
+        LEFT_VARIABLE
+        RIGHT_VARIABLE
+    }
+
+    class Connection {
+        -QString from_
+        -QString to_
+        -BoolVector positiveVector_
+        -BoolVector negativeVector_
+        -int position_
+        +Connection()
+        +Connection(QString from, QString to, BoolVector positiveVector, BoolVector negativeVector, int position)
+        +Connection(const Connection& other)
+        +operator=(const Connection& other) Connection&
+        +getFrom() QString
+        +getTo() QString
+        +getPositiveVector() BoolVector
+        +getNegativeVector() BoolVector
+        +getPosition() int
+        +setFrom(QString from) void
+        +setTo(QString to) void
+        +setPositiveVector(BoolVector vector) void
+        +setNegativeVector(BoolVector vector) void
+        +setPosition(int position) void
+        +setPositiveBit(size_t bitIndex) void
+        +clearPositiveBit(size_t bitIndex) void
+        +getPositiveBit(size_t bitIndex) bool
+        +resizePositiveVector(size_t newSize) void
+        +getPositiveVectorSize() size_t
+        +setNegativeBit(size_t bitIndex) void
+        +clearNegativeBit(size_t bitIndex) void
+        +getNegativeBit(size_t bitIndex) bool
+        +resizeNegativeVector(size_t newSize) void
+        +getNegativeVectorSize() size_t
+        +isValid() bool
+        +toString() QString
+    }
+
+    class Tree {
+        -QString name_
+        -QList~TreeElement*~ elements_
+        -QList~Connection*~ connections_
+        -Minisat::Solver* solver_
+        -int elementCount_
+        -int connectionCount_
+        +Tree()
+        +Tree(QString name)
+        +~Tree()
+        +Tree(const Tree& other)
+        +operator=(const Tree& other) Tree&
+        +getName() QString
+        +getElements() QList~TreeElement*~
+        +getConnections() QList~Connection*~
+        +getSolver() Minisat::Solver*
+        +getElementCount() int
+        +getConnectionCount() int
+        +setName(QString name) void
+        +addElement(TreeElement* element) void
+        +removeElement(TreeElement* element) void
+        +addConnection(Connection* connection) void
+        +removeConnection(Connection* connection) void
+        +findElement(QString name) TreeElement*
+        +findConnection(QString from, QString to) Connection*
+        +clear() void
+        +isValid() bool
+        +toString() QString
+    }
+
+    class TreeManager {
+        -QMap~QString, Tree*~ trees_
+        -int treeCount_
+        +TreeManager()
+        +~TreeManager()
+        +addTree(QString name, Tree* tree) void
+        +removeTree(QString name) void
+        +getTree(QString name) Tree*
+        +containsTree(QString name) bool
+        +getTreeCount() int
+        +getAllTrees() QMap~QString, Tree*~
+        +clear() void
+    }
+
+    class Parser_JSON {
+        -TreeManager* treeManager_
+        -bool has_error_
+        -bool has_memory_leak_
+        -int current_position_
+        -int memory_var_index_
+        -size_t max_bytes_count_
+        +Parser_JSON()
+        +~Parser_JSON()
+        +parseJsonFile(QString file_path) bool
+        +getTreeManager() TreeManager*
+        +hasError() bool
+        +hasMemoryLeak() bool
+        +printElements() void
+        +printCNFAsVectors() void
+        +solveCNF(Tree* tree) bool
+        -processBody(QJsonValue body_value, Tree* current_tree, int clause_id) void
+        -processBranch(QJsonObject branch_obj, Tree* current_tree, int clause_id) void
+        -processOperation(QJsonObject op_object, Tree* current_tree, int clause_id) void
+        -processLoop(QJsonObject loop_object, Tree* current_tree, int clause_id) void
+        -processStructureField(QJsonValue field_value, Tree* current_tree, QString var_name, int clause_id) void
+        -processNestedValue(QJsonObject value_obj, Tree* current_tree, QString var_name, int clause_id) void
+        -processValueField(QJsonValue field_value, Tree* current_tree, QString last_name, int nesting_level) void
+        -handleMalloc(Tree* current_tree, QString var_name, int clause_id) void
+        -handleFree(Tree* current_tree, QString var_name) void
+        -mergeTrees(Tree* target_tree, Tree* source_tree) void
+        -findLeaves(Tree* tree) QList~QString~
+        -findElementsWithRootConnection(Tree* tree) QList~QString~
+        -findOrCreateElement(Tree* tree, QString name, QString type) TreeElement*
+        -findOrCreateConnection(Tree* tree, QString from, QString to, int position) Connection*
+        -processNestedVariable(QString current_name, QString field_direction) void
+        -navigateByField(Tree* tree, QString current_name, QString field_direction, int clause_id) QString
+        -removeRootLinkClauses(Tree* tree, QString root_name, QString var_name) void
+        -findSetBitPosition(BoolVector bit_vector) size_t
+    }
+
+    %% Relationships
+    BoolVector --* Connection : composition
+    TreeElement --* Tree : composition
+    Connection --* Tree : composition
+    Tree --* TreeManager : composition
+    TreeManager --> Parser_JSON : association
+    TreeElementType ..> TreeElement : enumeration
+    CNFNode ..> BoolVector : friendclassDiagram
+    class BoolVector {
+        -std::vector~uint8_t~ data_
+        -size_t num_bits_
+        -size_t num_bytes_
+        +BoolVector()
+        +BoolVector(size_t bits_count)
+        +~BoolVector()
+        +BoolVector(const BoolVector& other)
+        +operator=(const BoolVector& other) BoolVector&
+        +print() void
+        +getBit(size_t bit_index) bool
+        +getData() const uint8_t*
+        +setBit(size_t bit_index) void
+        +clearBit(size_t bit_index) void
+        +isZero() bool
+        +size() size_t
+        +countBytes() size_t
+        +calculateBytes(size_t bits_count) size_t$
+        +resize(size_t new_bits_count) void
+    }
+
+    class TreeElement {
+        -QString name_
+        -int type_
+        -int position_
+        +TreeElement()
+        +TreeElement(QString name, int type, int position)
+        +TreeElement(const TreeElement& other)
+        +~TreeElement()
+        +operator=(const TreeElement& other) TreeElement&
+        +operator==(const TreeElement& other) bool
+        +operator!=(const TreeElement& other) bool
+        +getName() QString
+        +getType() int
+        +getPosition() int
+        +getTypeName() QString
+        +setName(QString name) void
+        +setType(int type) void
+        +setPosition(int position) void
+        +isValid() bool
+        +toString() QString
+        +isRoot() bool
+        +isMemory() bool
+        +isLeftVariable() bool
+        +isRightVariable() bool
+    }
+
+    class TreeElementType {
+        <<enumeration>>
+        ROOT
+        MEMORY
+        LEFT_VARIABLE
+        RIGHT_VARIABLE
+    }
+
+    class Connection {
+        -QString from_
+        -QString to_
+        -BoolVector positiveVector_
+        -BoolVector negativeVector_
+        -int position_
+        +Connection()
+        +Connection(QString from, QString to, BoolVector positiveVector, BoolVector negativeVector, int position)
+        +Connection(const Connection& other)
+        +operator=(const Connection& other) Connection&
+        +getFrom() QString
+        +getTo() QString
+        +getPositiveVector() BoolVector
+        +getNegativeVector() BoolVector
+        +getPosition() int
+        +setFrom(QString from) void
+        +setTo(QString to) void
+        +setPositiveVector(BoolVector vector) void
+        +setNegativeVector(BoolVector vector) void
+        +setPosition(int position) void
+        +setPositiveBit(size_t bitIndex) void
+        +clearPositiveBit(size_t bitIndex) void
+        +getPositiveBit(size_t bitIndex) bool
+        +resizePositiveVector(size_t newSize) void
+        +getPositiveVectorSize() size_t
+        +setNegativeBit(size_t bitIndex) void
+        +clearNegativeBit(size_t bitIndex) void
+        +getNegativeBit(size_t bitIndex) bool
+        +resizeNegativeVector(size_t newSize) void
+        +getNegativeVectorSize() size_t
+        +isValid() bool
+        +toString() QString
+    }
+
+    class Tree {
+        -QString name_
+        -QList~TreeElement*~ elements_
+        -QList~Connection*~ connections_
+        -Minisat::Solver* solver_
+        -int elementCount_
+        -int connectionCount_
+        +Tree()
+        +Tree(QString name)
+        +~Tree()
+        +Tree(const Tree& other)
+        +operator=(const Tree& other) Tree&
+        +getName() QString
+        +getElements() QList~TreeElement*~
+        +getConnections() QList~Connection*~
+        +getSolver() Minisat::Solver*
+        +getElementCount() int
+        +getConnectionCount() int
+        +setName(QString name) void
+        +addElement(TreeElement* element) void
+        +removeElement(TreeElement* element) void
+        +addConnection(Connection* connection) void
+        +removeConnection(Connection* connection) void
+        +findElement(QString name) TreeElement*
+        +findConnection(QString from, QString to) Connection*
+        +clear() void
+        +isValid() bool
+        +toString() QString
+    }
+
+    class TreeManager {
+        -QMap~QString, Tree*~ trees_
+        -int treeCount_
+        +TreeManager()
+        +~TreeManager()
+        +addTree(QString name, Tree* tree) void
+        +removeTree(QString name) void
+        +getTree(QString name) Tree*
+        +containsTree(QString name) bool
+        +getTreeCount() int
+        +getAllTrees() QMap~QString, Tree*~
+        +clear() void
+    }
+
+    class Parser_JSON {
+        -TreeManager* treeManager_
+        -bool has_error_
+        -bool has_memory_leak_
+        -int current_position_
+        -int memory_var_index_
+        -size_t max_bytes_count_
+        +Parser_JSON()
+        +~Parser_JSON()
+        +parseJsonFile(QString file_path) bool
+        +getTreeManager() TreeManager*
+        +hasError() bool
+        +hasMemoryLeak() bool
+        +printElements() void
+        +printCNFAsVectors() void
+        +solveCNF(Tree* tree) bool
+        -processBody(QJsonValue body_value, Tree* current_tree, int clause_id) void
+        -processBranch(QJsonObject branch_obj, Tree* current_tree, int clause_id) void
+        -processOperation(QJsonObject op_object, Tree* current_tree, int clause_id) void
+        -processLoop(QJsonObject loop_object, Tree* current_tree, int clause_id) void
+        -processStructureField(QJsonValue field_value, Tree* current_tree, QString var_name, int clause_id) void
+        -processNestedValue(QJsonObject value_obj, Tree* current_tree, QString var_name, int clause_id) void
+        -processValueField(QJsonValue field_value, Tree* current_tree, QString last_name, int nesting_level) void
+        -handleMalloc(Tree* current_tree, QString var_name, int clause_id) void
+        -handleFree(Tree* current_tree, QString var_name) void
+        -mergeTrees(Tree* target_tree, Tree* source_tree) void
+        -findLeaves(Tree* tree) QList~QString~
+        -findElementsWithRootConnection(Tree* tree) QList~QString~
+        -findOrCreateElement(Tree* tree, QString name, QString type) TreeElement*
+        -findOrCreateConnection(Tree* tree, QString from, QString to, int position) Connection*
+        -processNestedVariable(QString current_name, QString field_direction) void
+        -navigateByField(Tree* tree, QString current_name, QString field_direction, int clause_id) QString
+        -removeRootLinkClauses(Tree* tree, QString root_name, QString var_name) void
+        -findSetBitPosition(BoolVector bit_vector) size_t
+    }
+
+    %% Relationships
+    BoolVector --* Connection : composition
+    TreeElement --* Tree : composition
+    Connection --* Tree : composition
+    Tree --* TreeManager : composition
+    TreeManager --> Parser_JSON : association
+    TreeElementType ..> TreeElement : enumeration
+    CNFNode ..> BoolVector : friend
