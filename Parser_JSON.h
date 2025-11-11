@@ -67,15 +67,17 @@ private:
     // Методы для работы с памятью
     void handleMalloc(Tree* current_tree, const QString& var_name, int clause_id);
     void handleFree(Tree* current_tree, const QString& var_name);
+    void handleNullAssignment(Tree* current_tree, const QString& var_name, int clause_id);
     // Методы для работы с деревьями
     void mergeTrees(Tree* target_tree, Tree* source_tree);
     QList<QString> findLeaves(Tree* tree);
     QList<QString> findElementsWithRootConnection(Tree* tree);
+    TreeElement* findMemoryElement(Tree* tree);
     // Вспомогательные методы
     TreeElement* findOrCreateElement(Tree* tree, const QString& name, const QString& type);
     Connection* findOrCreateConnection(Tree* tree, const QString& from, const QString& to, int position);
     void processNestedVariable(QString& current_name, const QString& field_direction);
-
+    void handleMemoryAllocation(Tree* current_tree, const QString& var_name, int clause_id, const QString& operation_type);
     // Методы для маршрутизации по полям
     QString navigateByField(Tree* tree, const QString& current_name, const QString& field_direction, int clause_id);
     // Методы для работы с CNF
