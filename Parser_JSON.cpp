@@ -476,7 +476,7 @@ void Parser_JSON::processNestedValue(const QJsonObject& value_obj,
               << " [pos: " << target_element->getPosition() << "]" << std::endl;
     // Удаляем связи с корнем для целевого элемента
     removeRootLinkClauses(current_tree, current_tree->getName(), var_name);
-    // Remove previous pointer connections
+    // Удаляем предыдущую связь
     QList<Connection> prev_out = current_tree->getConnectionsFrom(var_name);
     for (const Connection& prev : prev_out) {
         current_tree->removeConnection(prev.getFrom(), prev.getTo());
@@ -618,7 +618,7 @@ void Parser_JSON::handleMemoryAllocation(Tree* current_tree, const QString& var_
     std::cout << "Executing " << operation_type.toStdString() << " for: " << var_name.toStdString() << std::endl;
     // 1. Проверяем и удаляем связь с корнем, если она существует
     removeRootLinkClauses(current_tree, current_tree->getName(), var_name);
-    // Remove previous pointer connections
+    // Удаление предыдущей связи
     QList<Connection> prev_out = current_tree->getConnectionsFrom(var_name);
     for (const Connection& prev : prev_out) {
         current_tree->removeConnection(prev.getFrom(), prev.getTo());
