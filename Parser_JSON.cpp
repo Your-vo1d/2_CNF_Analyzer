@@ -147,7 +147,7 @@ bool Parser_JSON::parseJsonFile(const QString& file_path)
         std::cout << "\n=== Solving CNF for ALL trees after row " << clause_id << " ===" << std::endl;
         QMap<QString, Tree*> all_trees = treeManager_->getAllTrees();
         std::cout << "Total trees: " << all_trees.size() << std::endl;
-        bool any_leak_detected_current_row = false; // ИСПРАВЛЕНО: локальная переменная для текущей строки
+        bool any_leak_detected_current_row = false; // локальная переменная для текущей строки
         for (auto it = all_trees.constBegin(); it != all_trees.constEnd(); ++it) {
             Tree* tree = it.value();
             std::cout << "\n--- Analyzing tree: " << tree->getName().toStdString() << " ---" << std::endl;
@@ -188,13 +188,13 @@ bool Parser_JSON::parseJsonFile(const QString& file_path)
             if (tree_has_leak) {
                 std::cout << "❌ MEMORY LEAK DETECTED in tree '"
                           << tree->getName().toStdString() << "' at row " << clause_id << std::endl;
-                any_leak_detected_current_row = true; // ИСПРАВЛЕНО: только локальная переменная
+                any_leak_detected_current_row = true; 
             } else {
                 std::cout << "✅ No memory leak in tree '"
                           << tree->getName().toStdString() << "' at row " << clause_id << std::endl;
             }
         }
-        // ИСПРАВЛЕНО: устанавливаем глобальный флаг только если в ЭТОЙ строке обнаружена утечка
+        // Устанавливаем глобальный флаг только если в ЭТОЙ строке обнаружена утечка
         if (any_leak_detected_current_row) {
             has_memory_leak_ = true;
             std::cout << "\nOVERALL: Memory leak detected at row " << clause_id << std::endl;
@@ -229,7 +229,7 @@ bool Parser_JSON::parseJsonFile(const QString& file_path)
                       << tree->getName().toStdString() << "'" << std::endl;
         }
     }
-    // ИСПРАВЛЕНО: определяем финальный результат на основе финального анализа
+    // Определяем финальный результат на основе финального анализа
     has_memory_leak_ = final_leak_detected;
     if (has_memory_leak_) {
         std::cout << "\nFINAL RESULT: Memory leaks detected in the program" << std::endl;
@@ -901,7 +901,7 @@ bool Parser_JSON::solveCNF(Tree* tree)
     }
     // Решаем КНФ
     bool result = solver.solve();
-    bool has_leak = result; // ИСПРАВЛЕНО: Утечка, если КНФ разрешима (SAT)
+    bool has_leak = result; // Утечка, если КНФ разрешима (SAT)
     if (result) {
         std::cout << "SAT - solution found for tree '" << tree->getName().toStdString() << "' - MEMORY LEAK DETECTED" << std::endl;
         for (size_t i = 0; i < totalVariables; ++i) {
