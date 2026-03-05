@@ -1,4 +1,4 @@
-#include "BoolVector.h"
+﻿#include "BoolVector.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,5 +157,20 @@ void BoolVector::resize(size_t new_size) {
         vector = newVector;
         bytes = new_bytes;
         bits = new_size;
+    }
+}
+
+BoolVector::BoolVector(const BoolVector& other)
+    : vector(nullptr), bits(other.bits), bytes(other.bytes)
+{
+    if (other.vector && bytes > 0) {
+        vector = (unsigned char*)malloc(sizeof(unsigned char) * bytes);
+        if (vector) {
+            memcpy(vector, other.vector, bytes);
+        } else {
+            // если malloc не смог — оставим пустым
+            bits = 0;
+            bytes = 0;
+        }
     }
 }
