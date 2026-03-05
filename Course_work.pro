@@ -1,29 +1,27 @@
 QT = core
-
 CONFIG += c++17 cmdline
 CONFIG -= app_bundle
 TEMPLATE = app
+TARGET = TreeProgram
 
-TARGET = TreeProgram  # Явно задаем имя программы
-
-INCLUDEPATH += /usr/local/include
-LIBS += -L/usr/local/lib -lminisat
+INCLUDEPATH += include /usr/local/include
+LIBS += -lminisat
 
 SOURCES += \
-    Connection.cpp \
-    Tree.cpp \
-    TreeElement.cpp \
-    TreeManager.cpp \
-    main.cpp \
-    BoolVector.cpp \
-    Parser_JSON.cpp
+    src/main.cpp \
+    src/Connection.cpp \
+    src/Tree.cpp \
+    src/TreeElement.cpp \
+    src/TreeManager.cpp \
+    src/BoolVector.cpp \
+    src/Parser_JSON.cpp \
+    src/CNFNode.cpp
 
 HEADERS += \
-    BoolVector.h \
-    Connection.h \
-    Parser_JSON.h \
-    Tree.h \
-    TreeElement.h \
-    TreeManager.h
-
-# УДАЛИТЬ ВСЕ что связано с запуском и копированием!
+    include/BoolVector.h \
+    include/Connection.h \
+    include/Parser_JSON.h \
+    include/Tree.h \
+    include/TreeElement.h \
+    include/TreeManager.h \
+    include/CNFNode.h
