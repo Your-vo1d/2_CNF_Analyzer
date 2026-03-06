@@ -1,0 +1,49 @@
+{
+  "code": {
+    "rows": [
+      {
+        "id": 56,
+        "variable": "root",
+        "value": "malloc"
+      },
+      {
+        "id": 63,
+        "operation": "call",
+        "function_id": "func1",
+        "params": ["root->left"],
+        "context": "local_stack_1"
+      },
+      {
+        "id": 69,
+        "variable": "root->left",
+        "value": "free"
+      },
+      {
+        "id": 70,
+        "variable": "root",
+        "field": {
+          "f": "left",
+          "value": "malloc"
+        }
+      }
+    ]
+  },
+  "functions": {
+    "func1": {
+      "id": "func1",
+      "rows": [
+        {
+          "id": 10,
+          "variable": "$param0",
+          "value": "malloc"
+        }
+      ]
+    }
+  },
+  "stacks": {
+    "local_stack_1": {
+      "tree": "root_tree",
+      "snapshot": "base_state_id"
+    }
+  }
+}
