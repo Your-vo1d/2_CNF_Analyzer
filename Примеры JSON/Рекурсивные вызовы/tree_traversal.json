@@ -1,0 +1,168 @@
+{
+  "description": "Пример рекурсивного обхода бинарного дерева",
+  "code": {
+    "rows": [
+      {
+        "id": 1,
+        "variable": "root",
+        "value": "malloc"
+      },
+      {
+        "id": 2,
+        "operation": "call",
+        "function_id": "traverse_tree",
+        "params": ["root"],
+        "context": "main_stack"
+      }
+    ]
+  },
+  "functions": {
+    "traverse_tree": {
+      "id": "traverse_tree",
+      "name": "traverse_tree",
+      "parameters": ["node"],
+      "rows": [
+        {
+          "id": 10,
+          "variable": "$param0",
+          "alias": "node"
+        },
+        {
+          "id": 11,
+          "operation": "if",
+          "condition": "$param0 == NULL",
+          "then_branch": [
+            {
+              "id": 12,
+              "operation": "return",
+              "value": "void"
+            }
+          ],
+          "else_branch": [
+            {
+              "id": 13,
+              "operation": "process",
+              "target": "$param0->value"
+            },
+            {
+              "id": 14,
+              "operation": "call",
+              "function_id": "traverse_tree",
+              "params": ["$param0->left"],
+              "context": "recursive_left",
+              "recursion_type": "left_subtree"
+            },
+            {
+              "id": 15,
+              "operation": "call",
+              "function_id": "traverse_tree",
+              "params": ["$param0->right"],
+              "context": "recursive_right",
+              "recursion_type": "right_subtree"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "execution_trace": [
+    {
+      "stack_id": "main_stack",
+      "function": "traverse_tree",
+      "params": {"node": "root"},
+      "action": "call",
+      "depth": 0
+    },
+    {
+      "stack_id": "recursive_left_1",
+      "function": "traverse_tree",
+      "params": {"node": "root->left"},
+      "action": "recursive_call",
+      "depth": 1,
+      "parent": "main_stack",
+      "branch": "left"
+    },
+    {
+      "stack_id": "recursive_left_2",
+      "function": "traverse_tree",
+      "params": {"node": "root->left->left"},
+      "action": "recursive_call",
+      "depth": 2,
+      "parent": "recursive_left_1",
+      "branch": "left"
+    },
+    {
+      "stack_id": "recursive_left_2",
+      "function": "traverse_tree",
+      "params": {"node": "NULL"},
+      "action": "base_case_return",
+      "depth": 2
+    },
+    {
+      "stack_id": "recursive_left_1",
+      "function": "traverse_tree",
+      "params": {"node": "root->left->right"},
+      "action": "recursive_call",
+      "depth": 2,
+      "parent": "recursive_left_1",
+      "branch": "right"
+    },
+    {
+      "stack_id": "recursive_left_1",
+      "function": "traverse_tree",
+      "action": "return",
+      "depth": 1
+    },
+    {
+      "stack_id": "main_stack",
+      "function": "traverse_tree",
+      "params": {"node": "root->right"},
+      "action": "recursive_call",
+      "depth": 1,
+      "parent": "main_stack",
+      "branch": "right"
+    },
+    {
+      "stack_id": "main_stack",
+      "function": "traverse_tree",
+      "action": "return",
+      "depth": 0
+    }
+  ],
+  "stacks": {
+    "main_stack": {
+      "tree": "binary_tree",
+      "snapshot": "initial_tree_state"
+    },
+    "recursive_left_1": {
+      "tree": "binary_tree",
+      "snapshot": "left_subtree_state",
+      "parent": "main_stack"
+    },
+    "recursive_left_2": {
+      "tree": "binary_tree",
+      "snapshot": "left_left_subtree_state",
+      "parent": "recursive_left_1"
+    },
+    "recursive_right_1": {
+      "tree": "binary_tree",
+      "snapshot": "right_subtree_state",
+      "parent": "main_stack"
+    }
+  },
+  "tree_structure": {
+    "root": {
+      "value": 1,
+      "left": {
+        "value": 2,
+        "left": {"value": 4, "left": null, "right": null},
+        "right": {"value": 5, "left": null, "right": null}
+      },
+      "right": {
+        "value": 3,
+        "left": {"value": 6, "left": null, "right": null},
+        "right": {"value": 7, "left": null, "right": null}
+      }
+    }
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "description": "Пример рекурсивного вызова функции вычисления факториала",
+  "code": {
+    "rows": [
+      {
+        "id": 1,
+        "variable": "n",
+        "value": 5
+      },
+      {
+        "id": 2,
+        "operation": "call",
+        "function_id": "factorial",
+        "params": ["n"],
+        "context": "stack_level_0"
+      },
+      {
+        "id": 3,
+        "variable": "result",
+        "value": "$return_value"
+      }
+    ]
+  },
+  "functions": {
+    "factorial": {
+      "id": "factorial",
+      "name": "factorial",
+      "parameters": ["n"],
+      "rows": [
+        {
+          "id": 10,
+          "variable": "$param0",
+          "alias": "n"
+        },
+        {
+          "id": 11,
+          "operation": "if",
+          "condition": "$param0 <= 1",
+          "then_branch": [
+            {
+              "id": 12,
+              "operation": "return",
+              "value": 1
+            }
+          ],
+          "else_branch": [
+            {
+              "id": 13,
+              "operation": "call",
+              "function_id": "factorial",
+              "params": ["$param0 - 1"],
+              "context": "recursive_stack",
+              "recursion_depth": 1
+            },
+            {
+              "id": 14,
+              "operation": "return",
+              "value": "$param0 * $recursive_result"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "execution_trace": [
+    {
+      "stack_id": "stack_level_0",
+      "function": "factorial",
+      "params": {"n": 5},
+      "action": "call",
+      "depth": 0
+    },
+    {
+      "stack_id": "recursive_stack_1",
+      "function": "factorial",
+      "params": {"n": 4},
+      "action": "recursive_call",
+      "depth": 1,
+      "parent": "stack_level_0"
+    },
+    {
+      "stack_id": "recursive_stack_2",
+      "function": "factorial",
+      "params": {"n": 3},
+      "action": "recursive_call",
+      "depth": 2,
+      "parent": "recursive_stack_1"
+    },
+    {
+      "stack_id": "recursive_stack_3",
+      "function": "factorial",
+      "params": {"n": 2},
+      "action": "recursive_call",
+      "depth": 3,
+      "parent": "recursive_stack_2"
+    },
+    {
+      "stack_id": "recursive_stack_4",
+      "function": "factorial",
+      "params": {"n": 1},
+      "action": "recursive_call",
+      "depth": 4,
+      "parent": "recursive_stack_3"
+    },
+    {
+      "stack_id": "recursive_stack_4",
+      "function": "factorial",
+      "return_value": 1,
+      "action": "return",
+      "depth": 4
+    },
+    {
+      "stack_id": "recursive_stack_3",
+      "function": "factorial",
+      "return_value": 2,
+      "action": "return",
+      "depth": 3
+    },
+    {
+      "stack_id": "recursive_stack_2",
+      "function": "factorial",
+      "return_value": 6,
+      "action": "return",
+      "depth": 2
+    },
+    {
+      "stack_id": "recursive_stack_1",
+      "function": "factorial",
+      "return_value": 24,
+      "action": "return",
+      "depth": 1
+    },
+    {
+      "stack_id": "stack_level_0",
+      "function": "factorial",
+      "return_value": 120,
+      "action": "return",
+      "depth": 0
+    }
+  ],
+  "stacks": {
+    "stack_level_0": {
+      "tree": "main_tree",
+      "snapshot": "initial_state"
+    },
+    "recursive_stack_1": {
+      "tree": "main_tree",
+      "snapshot": "state_n_4",
+      "parent": "stack_level_0"
+    },
+    "recursive_stack_2": {
+      "tree": "main_tree",
+      "snapshot": "state_n_3",
+      "parent": "recursive_stack_1"
+    },
+    "recursive_stack_3": {
+      "tree": "main_tree",
+      "snapshot": "state_n_2",
+      "parent": "recursive_stack_2"
+    },
+    "recursive_stack_4": {
+      "tree": "main_tree",
+      "snapshot": "state_n_1",
+      "parent": "recursive_stack_3"
+    }
+  }
+}

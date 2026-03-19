@@ -1,0 +1,236 @@
+{
+  "description": "Пример взаимной рекурсии (mutual recursion) - функции is_even и is_odd",
+  "code": {
+    "rows": [
+      {
+        "id": 1,
+        "variable": "n",
+        "value": 5
+      },
+      {
+        "id": 2,
+        "operation": "call",
+        "function_id": "is_even",
+        "params": ["n"],
+        "context": "main_stack"
+      }
+    ]
+  },
+  "functions": {
+    "is_even": {
+      "id": "is_even",
+      "name": "is_even",
+      "parameters": ["n"],
+      "rows": [
+        {
+          "id": 10,
+          "variable": "$param0",
+          "alias": "n"
+        },
+        {
+          "id": 11,
+          "operation": "if",
+          "condition": "$param0 == 0",
+          "then_branch": [
+            {
+              "id": 12,
+              "operation": "return",
+              "value": true
+            }
+          ],
+          "else_branch": [
+            {
+              "id": 13,
+              "operation": "call",
+              "function_id": "is_odd",
+              "params": ["$param0 - 1"],
+              "context": "mutual_recursive_call",
+              "recursion_type": "mutual"
+            },
+            {
+              "id": 14,
+              "operation": "return",
+              "value": "$mutual_result"
+            }
+          ]
+        }
+      ]
+    },
+    "is_odd": {
+      "id": "is_odd",
+      "name": "is_odd",
+      "parameters": ["n"],
+      "rows": [
+        {
+          "id": 20,
+          "variable": "$param0",
+          "alias": "n"
+        },
+        {
+          "id": 21,
+          "operation": "if",
+          "condition": "$param0 == 0",
+          "then_branch": [
+            {
+              "id": 22,
+              "operation": "return",
+              "value": false
+            }
+          ],
+          "else_branch": [
+            {
+              "id": 23,
+              "operation": "call",
+              "function_id": "is_even",
+              "params": ["$param0 - 1"],
+              "context": "mutual_recursive_call",
+              "recursion_type": "mutual"
+            },
+            {
+              "id": 24,
+              "operation": "return",
+              "value": "$mutual_result"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "execution_trace": [
+    {
+      "stack_id": "main_stack",
+      "function": "is_even",
+      "params": {"n": 5},
+      "action": "call",
+      "depth": 0
+    },
+    {
+      "stack_id": "mutual_stack_1",
+      "function": "is_odd",
+      "params": {"n": 4},
+      "action": "mutual_recursive_call",
+      "depth": 1,
+      "parent": "main_stack",
+      "called_from": "is_even"
+    },
+    {
+      "stack_id": "mutual_stack_2",
+      "function": "is_even",
+      "params": {"n": 3},
+      "action": "mutual_recursive_call",
+      "depth": 2,
+      "parent": "mutual_stack_1",
+      "called_from": "is_odd"
+    },
+    {
+      "stack_id": "mutual_stack_3",
+      "function": "is_odd",
+      "params": {"n": 2},
+      "action": "mutual_recursive_call",
+      "depth": 3,
+      "parent": "mutual_stack_2",
+      "called_from": "is_even"
+    },
+    {
+      "stack_id": "mutual_stack_4",
+      "function": "is_even",
+      "params": {"n": 1},
+      "action": "mutual_recursive_call",
+      "depth": 4,
+      "parent": "mutual_stack_3",
+      "called_from": "is_odd"
+    },
+    {
+      "stack_id": "mutual_stack_5",
+      "function": "is_odd",
+      "params": {"n": 0},
+      "action": "mutual_recursive_call",
+      "depth": 5,
+      "parent": "mutual_stack_4",
+      "called_from": "is_even"
+    },
+    {
+      "stack_id": "mutual_stack_5",
+      "function": "is_odd",
+      "return_value": false,
+      "action": "return",
+      "depth": 5
+    },
+    {
+      "stack_id": "mutual_stack_4",
+      "function": "is_even",
+      "return_value": false,
+      "action": "return",
+      "depth": 4
+    },
+    {
+      "stack_id": "mutual_stack_3",
+      "function": "is_odd",
+      "return_value": false,
+      "action": "return",
+      "depth": 3
+    },
+    {
+      "stack_id": "mutual_stack_2",
+      "function": "is_even",
+      "return_value": false,
+      "action": "return",
+      "depth": 2
+    },
+    {
+      "stack_id": "mutual_stack_1",
+      "function": "is_odd",
+      "return_value": false,
+      "action": "return",
+      "depth": 1
+    },
+    {
+      "stack_id": "main_stack",
+      "function": "is_even",
+      "return_value": false,
+      "action": "return",
+      "depth": 0
+    }
+  ],
+  "stacks": {
+    "main_stack": {
+      "tree": "main_tree",
+      "snapshot": "initial_state"
+    },
+    "mutual_stack_1": {
+      "tree": "main_tree",
+      "snapshot": "state_n_4",
+      "parent": "main_stack"
+    },
+    "mutual_stack_2": {
+      "tree": "main_tree",
+      "snapshot": "state_n_3",
+      "parent": "mutual_stack_1"
+    },
+    "mutual_stack_3": {
+      "tree": "main_tree",
+      "snapshot": "state_n_2",
+      "parent": "mutual_stack_2"
+    },
+    "mutual_stack_4": {
+      "tree": "main_tree",
+      "snapshot": "state_n_1",
+      "parent": "mutual_stack_3"
+    },
+    "mutual_stack_5": {
+      "tree": "main_tree",
+      "snapshot": "state_n_0",
+      "parent": "mutual_stack_4"
+    }
+  },
+  "call_graph": {
+    "nodes": [
+      {"id": "is_even", "type": "function"},
+      {"id": "is_odd", "type": "function"}
+    ],
+    "edges": [
+      {"from": "is_even", "to": "is_odd", "label": "n-1"},
+      {"from": "is_odd", "to": "is_even", "label": "n-1"}
+    ]
+  }
+}
