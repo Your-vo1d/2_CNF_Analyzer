@@ -253,6 +253,24 @@ private:
     void handleNullAssignment(Tree* current_tree, const QString& var_name, int clause_id);
 
     /**
+     * @brief Обработка присваивания магических/ошибочных значений указателя
+     *
+     * Метод создаёт специальный элемент-маркер (SPEC_XXXX) и связывает переменную с ним.
+     * Используется для обработки значений, возвращаемых при ошибках (например, 0xFFFFFFFF),
+     * которые семантически аналогичны NULL, но требуют отдельного отслеживания в графе.
+     *
+     * @param current_tree Текущее дерево
+     * @param var_name Имя переменной
+     * @param clause_id Идентификатор условия
+     * @param magicValue Магическое значение указателя (например, 0xFFFFFFFF)
+     */
+    void handleSpecialPointerAssignment(Tree* current_tree,
+                                        const QString& var_name,
+                                        int clause_id,
+                                        uint32_t magicValue);
+
+
+    /**
      * @brief Поиск или создание элемента дерева
      * @param tree Текущее дерево
      * @param name Имя элемента

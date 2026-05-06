@@ -1,4 +1,4 @@
-#ifndef TREEELEMENT_H
+﻿#ifndef TREEELEMENT_H
 #define TREEELEMENT_H
 
 #include <QString>
@@ -12,7 +12,8 @@ public:
         MEMORY = 1, // Память (создается после malloc)
         NULL_ELEMENT = 2, // Null
         LEFT_VARIABLE = 3, // Левая переменная
-        RIGHT_VARIABLE = 4 // Правая переменная
+        RIGHT_VARIABLE = 4, // Правая переменная
+        MAGIC_POINTER = 5
     };
 
     // Конструкторы

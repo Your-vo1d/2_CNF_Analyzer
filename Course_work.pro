@@ -14,8 +14,13 @@ SOURCES += \
     src/TreeElement.cpp \
     src/TreeManager.cpp \
     src/BoolVector.cpp \
-    src/Parser_JSON.cpp \
-    src/CNFNode.cpp
+    src/CNFNode.cpp \
+    src/Parser_JSON_Core.cpp \
+    src/Parser_JSON_Row.cpp \
+    src/Parser_JSON_Structure.cpp \
+    src/Parser_JSON_Memory.cpp \
+    src/Parser_JSON_Tree.cpp \
+    src/Parser_JSON_CNF.cpp
 
 HEADERS += \
     include/BoolVector.h \
