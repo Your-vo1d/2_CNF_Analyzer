@@ -1,0 +1,20 @@
+{
+    "code": {
+        "rows": [
+            { "id": 1, "variable": "root", "value": "malloc" },
+            { "id": 2, "operation": "call", "function_id": "alloc_node", "params": ["root->left"] },
+            { "id": 3, "variable": "root", "field": { "f": "left", "value": "free" } },
+            { "id": 4, "variable": "root", "field": { "f": "left", "value": null   } },
+            { "id": 5, "variable": "root", "value": "free" },
+            { "id": 6, "variable": "root", "value": null }
+        ]
+    },
+    "functions": {
+        "alloc_node": {
+            "id": "alloc_node",
+            "rows": [
+                { "id": 1, "variable": "$param0", "value": "malloc" }
+            ]
+        }
+    }
+}

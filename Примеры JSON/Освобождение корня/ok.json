@@ -1,0 +1,9 @@
+{
+    "code": {
+        "rows": [
+            { "id": 1, "variable": "root", "value": "malloc" },
+            { "id": 2, "variable": "root", "value": "free" },
+            { "id": 3, "variable": "root", "value": null }
+        ]
+    }
+}

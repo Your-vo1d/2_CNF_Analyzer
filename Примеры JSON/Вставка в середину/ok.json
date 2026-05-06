@@ -1,0 +1,15 @@
+{
+    "code": {
+        "rows": [
+            { "id": 1, "variable": "root", "value": "malloc" },
+            { "id": 2, "variable": "root", "field": { "f": "left", "value": "malloc" } },
+            { "id": 3, "variable": "root", "field": { "f": "left", "value": "free"  } },
+            { "id": 4, "variable": "root", "field": { "f": "left", "value": null    } },
+            { "id": 5, "variable": "root", "field": { "f": "left", "value": "malloc" } },
+            { "id": 6, "variable": "root", "field": { "f": "left", "value": "free"  } },
+            { "id": 7, "variable": "root", "field": { "f": "left", "value": null    } },
+            { "id": 8, "variable": "root", "value": "free" },
+            { "id": 9, "variable": "root", "value": null }
+        ]
+    }
+}
