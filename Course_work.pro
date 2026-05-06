@@ -4,8 +4,9 @@ CONFIG -= app_bundle
 TEMPLATE = app
 TARGET = TreeProgram
 
-INCLUDEPATH += include /usr/local/include
-LIBS += -lminisat
+INCLUDEPATH += include third_party/minisat
+
+DEFINES += __STDC_LIMIT_MACROS __STDC_FORMAT_MACROS
 
 SOURCES += \
     src/main.cpp \
@@ -20,7 +21,10 @@ SOURCES += \
     src/Parser_JSON_Structure.cpp \
     src/Parser_JSON_Memory.cpp \
     src/Parser_JSON_Tree.cpp \
-    src/Parser_JSON_CNF.cpp
+    src/Parser_JSON_CNF.cpp \
+    third_party/minisat/minisat/core/Solver.cc \
+    third_party/minisat/minisat/utils/Options.cc \
+    third_party/minisat/minisat/utils/System.cc
 
 HEADERS += \
     include/BoolVector.h \
