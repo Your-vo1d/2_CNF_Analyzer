@@ -1,0 +1,24 @@
+==33983== Memcheck, a memory error detector
+==33983== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==33983== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==33983== Command: ./leak_prog
+==33983== Parent PID: 33969
+==33983== 
+==33983== 
+==33983== HEAP SUMMARY:
+==33983==     in use at exit: 16 bytes in 1 blocks
+==33983==   total heap usage: 3 allocs, 2 frees, 48 bytes allocated
+==33983== 
+==33983== 16 bytes in 1 blocks are definitely lost in loss record 1 of 1
+==33983==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==33983==    by 0x1091A0: main (leak.c:7)
+==33983== 
+==33983== LEAK SUMMARY:
+==33983==    definitely lost: 16 bytes in 1 blocks
+==33983==    indirectly lost: 0 bytes in 0 blocks
+==33983==      possibly lost: 0 bytes in 0 blocks
+==33983==    still reachable: 0 bytes in 0 blocks
+==33983==         suppressed: 0 bytes in 0 blocks
+==33983== 
+==33983== For lists of detected and suppressed errors, rerun with: -s
+==33983== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
