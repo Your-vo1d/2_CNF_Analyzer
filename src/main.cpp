@@ -1,9 +1,12 @@
-﻿#include <QCoreApplication>
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <iostream>
-#include "Parser_JSON.h"
+#include <memory>
+#include "IMemoryAnalyzer.h"
+#include "MemoryAnalyzer.h"
+#include "MinisatSolver.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
 
@@ -12,34 +15,31 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // argv в Linux обычно
-    QString file_path = QString::fromUtf8(argv[1]);
-
-    // Доп.диагностика, чтобы сразу видеть проблему с путём
-    QFileInfo fi(file_path);
+    QString filePath = QString::fromUtf8(argv[1]);
+    QFileInfo fi(filePath);
     if (!fi.exists() || !fi.isFile()) {
-        std::cout << "Error: file not found: " << file_path.toStdString() << std::endl;
+        std::cout << "Error: file not found: " << filePath.toStdString() << std::endl;
         std::cout << "Usage: " << argv[0] << " <json_file_path>" << std::endl;
         return 1;
     }
 
-    Parser_JSON parser;
-    bool success = parser.parseJsonFile(file_path);
+    std::unique_ptr<ISATSolver> solver = std::make_unique<MinisatSolver>();
+    std::unique_ptr<IMemoryAnalyzer> analyzer =
+        std::make_unique<MemoryAnalyzer>(std::move(solver));
+
+    bool success = analyzer->analyze(filePath);
 
     if (success) {
-        std::cout << "\n=== Parsing completed successfully ===" << std::endl;
-        parser.printElements();
-
-        if (parser.hasMemoryLeak()) {
+        std::cout << "\n=== Analysis completed successfully ===" << std::endl;
+        analyzer->printElements();
+        if (analyzer->hasMemoryLeak())
             std::cout << "WARNING: Memory leaks detected!" << std::endl;
-        } else {
+        else
             std::cout << "No memory leaks detected." << std::endl;
-        }
     } else {
-        std::cout << "\n=== Parsing failed ===" << std::endl;
-        if (parser.hasError()) {
-            std::cout << "Errors occurred during parsing." << std::endl;
-        }
+        std::cout << "\n=== Analysis failed ===" << std::endl;
+        if (analyzer->hasError())
+            std::cout << "Errors occurred during analysis." << std::endl;
         return 2;
     }
 
