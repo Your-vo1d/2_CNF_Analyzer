@@ -1,355 +1,271 @@
-classDiagram
-    class BoolVector {
-        -std::vector~uint8_t~ data_
-        -size_t num_bits_
-        -size_t num_bytes_
-        +BoolVector()
-        +BoolVector(size_t bits_count)
-        +~BoolVector()
-        +BoolVector(const BoolVector& other)
-        +operator=(const BoolVector& other) BoolVector&
-        +print() void
-        +getBit(size_t bit_index) bool
-        +getData() const uint8_t*
-        +setBit(size_t bit_index) void
-        +clearBit(size_t bit_index) void
-        +isZero() bool
-        +size() size_t
-        +countBytes() size_t
-        +calculateBytes(size_t bits_count) size_t$
-        +resize(size_t new_bits_count) void
+@startuml CNF_Analyzer
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+' ─── Interfaces ───────────────────────────────────────────────────────────────
+
+package "interfaces" #EEBBFF {
+
+    interface IMemoryAnalyzer {
+        +analyze(filePath : QString) : bool
+        +hasError() : bool
+        +hasMemoryLeak() : bool
+        +printElements() : void
     }
 
-    class TreeElement {
-        -QString name_
-        -int type_
-        -int position_
-        +TreeElement()
-        +TreeElement(QString name, int type, int position)
-        +TreeElement(const TreeElement& other)
-        +~TreeElement()
-        +operator=(const TreeElement& other) TreeElement&
-        +operator==(const TreeElement& other) bool
-        +operator!=(const TreeElement& other) bool
-        +getName() QString
-        +getType() int
-        +getPosition() int
-        +getTypeName() QString
-        +setName(QString name) void
-        +setType(int type) void
-        +setPosition(int position) void
-        +isValid() bool
-        +toString() QString
-        +isRoot() bool
-        +isMemory() bool
-        +isLeftVariable() bool
-        +isRightVariable() bool
+    interface ISATSolver {
+        +solve(connections : QList<Connection>,\n       elements : QMap<QString, TreeElement*>) : bool
     }
 
-    class TreeElementType {
-        <<enumeration>>
-        ROOT
-        MEMORY
-        LEFT_VARIABLE
-        RIGHT_VARIABLE
+    interface IMemoryOperation {
+        +handles(value : QJsonValue) : bool
+        +execute(tree : Tree*,\n         varName : QString,\n         clauseId : int,\n         value : QJsonValue,\n         builder : GraphBuilder&,\n         hasMemoryLeak : bool&) : void
+    }
+}
+
+' ─── Analysis ─────────────────────────────────────────────────────────────────
+
+package "analysis" #CCEECC {
+
+    class MemoryAnalyzer {
+        -solver_ : unique_ptr<ISATSolver>
+        -treeManager_ : unique_ptr<TreeManager>
+        -graphBuilder_ : unique_ptr<GraphBuilder>
+        -rowProcessor_ : unique_ptr<RowProcessor>
+        -operations_ : QList<IMemoryOperation*>
+        -has_error_ : bool
+        -has_memory_leak_ : bool
+        --
+        +MemoryAnalyzer(solver : unique_ptr<ISATSolver>)
+        +analyze(filePath : QString) : bool
+        +hasError() : bool
+        +hasMemoryLeak() : bool
+        +printElements() : void
+        -registerDefaultOperations() : void
+        -analyzeAllTrees(rowId : int) : void
     }
 
-    class Connection {
-        -QString from_
-        -QString to_
-        -BoolVector positiveVector_
-        -BoolVector negativeVector_
-        -int position_
-        +Connection()
-        +Connection(QString from, QString to, BoolVector positiveVector, BoolVector negativeVector, int position)
-        +Connection(const Connection& other)
-        +operator=(const Connection& other) Connection&
-        +getFrom() QString
-        +getTo() QString
-        +getPositiveVector() BoolVector
-        +getNegativeVector() BoolVector
-        +getPosition() int
-        +setFrom(QString from) void
-        +setTo(QString to) void
-        +setPositiveVector(BoolVector vector) void
-        +setNegativeVector(BoolVector vector) void
-        +setPosition(int position) void
-        +setPositiveBit(size_t bitIndex) void
-        +clearPositiveBit(size_t bitIndex) void
-        +getPositiveBit(size_t bitIndex) bool
-        +resizePositiveVector(size_t newSize) void
-        +getPositiveVectorSize() size_t
-        +setNegativeBit(size_t bitIndex) void
-        +clearNegativeBit(size_t bitIndex) void
-        +getNegativeBit(size_t bitIndex) bool
-        +resizeNegativeVector(size_t newSize) void
-        +getNegativeVectorSize() size_t
-        +isValid() bool
-        +toString() QString
+    class GraphBuilder {
+        -manager_ : TreeManager*
+        -current_position_ : int
+        -memory_var_index_ : int
+        -max_bytes_count_ : size_t
+        --
+        +GraphBuilder(manager : TreeManager*)
+        +findOrCreateElement(tree : Tree*, name : QString, type : int) : TreeElement*
+        +findOrCreateConnection(tree : Tree*, from : QString, to : QString, position : int) : Connection*
+        +removeRootLinkClauses(tree : Tree*, rootName : QString, varName : QString) : void
+        +mergeTrees(target : Tree*, source : Tree*) : void
+        +findLeaves(tree : Tree*) : QList<QString>
+        +findMemoryElement(tree : Tree*) : TreeElement*
+        +{static} findSetBitPosition(bv : BoolVector) : size_t
+        +nextPosition() : int
+        +nextMemoryVarIndex() : int
+        +maxBytesCount() : size_t
+    }
+
+    class RowProcessor {
+        -manager_ : TreeManager*
+        -builder_ : GraphBuilder*
+        -operations_ : QList<IMemoryOperation*>
+        -functions_ : QJsonObject
+        -stacks_ : QJsonObject
+        -has_error_ : bool
+        -has_memory_leak_ : bool
+        --
+        +RowProcessor(manager : TreeManager*, builder : GraphBuilder*,\n              operations : QList<IMemoryOperation*>)
+        +setFunctions(functions : QJsonObject, stacks : QJsonObject) : void
+        +processRow(row : QJsonObject, currentTree : Tree*&, clauseId : int) : void
+        +hasError() : bool
+        +hasMemoryLeak() : bool
+        -getOrCreateTree(name : QString) : Tree*
+        -processBody(bodyValue : QJsonValue, currentTree : Tree*, clauseId : int) : void
+        -processBranch(branchObj : QJsonObject, currentTree : Tree*, clauseId : int) : void
+        -processOperation(opObject : QJsonObject, currentTree : Tree*, clauseId : int) : void
+        -processLoop(loopObject : QJsonObject, currentTree : Tree*, clauseId : int) : void
+        -dispatchMemoryOp(tree : Tree*, varName : QString,\n                   clauseId : int, value : QJsonValue) : void
+    }
+}
+
+' ─── Solver ───────────────────────────────────────────────────────────────────
+
+package "solver" #FFCCDD {
+
+    class MinisatSolver {
+        +solve(connections : QList<Connection>,\n       elements : QMap<QString, TreeElement*>) : bool
+    }
+}
+
+' ─── Operations ───────────────────────────────────────────────────────────────
+
+package "operations" #FFFACC {
+
+    class MallocOperation {
+        +handles(value : QJsonValue) : bool
+        +execute(tree : Tree*, varName : QString, clauseId : int,\n         value : QJsonValue, builder : GraphBuilder&,\n         hasMemoryLeak : bool&) : void
+    }
+
+    class FreeOperation {
+        +handles(value : QJsonValue) : bool
+        +execute(tree : Tree*, varName : QString, clauseId : int,\n         value : QJsonValue, builder : GraphBuilder&,\n         hasMemoryLeak : bool&) : void
+    }
+
+    class NullOperation {
+        +handles(value : QJsonValue) : bool
+        +execute(tree : Tree*, varName : QString, clauseId : int,\n         value : QJsonValue, builder : GraphBuilder&,\n         hasMemoryLeak : bool&) : void
+    }
+
+    class SpecialPtrOperation {
+        +handles(value : QJsonValue) : bool
+        +execute(tree : Tree*, varName : QString, clauseId : int,\n         value : QJsonValue, builder : GraphBuilder&,\n         hasMemoryLeak : bool&) : void
+    }
+}
+
+' ─── Model ────────────────────────────────────────────────────────────────────
+
+package "model" #DDEEFF {
+
+    class TreeManager {
+        -trees_ : QMap<QString, Tree*>
+        -treeCount_ : int
+        --
+        +addTree(name : QString, tree : Tree*) : void
+        +removeTree(name : QString) : void
+        +getTree(name : QString) : Tree*
+        +containsTree(name : QString) : bool
+        +getTreeCount() : int
+        +getAllTrees() : QMap<QString, Tree*>
+        +clear() : void
     }
 
     class Tree {
-        -QString name_
-        -QList~TreeElement*~ elements_
-        -QList~Connection*~ connections_
-        -Minisat::Solver* solver_
-        -int elementCount_
-        -int connectionCount_
-        +Tree()
-        +Tree(QString name)
-        +~Tree()
-        +Tree(const Tree& other)
-        +operator=(const Tree& other) Tree&
-        +getName() QString
-        +getElements() QList~TreeElement*~
-        +getConnections() QList~Connection*~
-        +getSolver() Minisat::Solver*
-        +getElementCount() int
-        +getConnectionCount() int
-        +setName(QString name) void
-        +addElement(TreeElement* element) void
-        +removeElement(TreeElement* element) void
-        +addConnection(Connection* connection) void
-        +removeConnection(Connection* connection) void
-        +findElement(QString name) TreeElement*
-        +findConnection(QString from, QString to) Connection*
-        +clear() void
-        +isValid() bool
-        +toString() QString
-    }
-
-    class TreeManager {
-        -QMap~QString, Tree*~ trees_
-        -int treeCount_
-        +TreeManager()
-        +~TreeManager()
-        +addTree(QString name, Tree* tree) void
-        +removeTree(QString name) void
-        +getTree(QString name) Tree*
-        +containsTree(QString name) bool
-        +getTreeCount() int
-        +getAllTrees() QMap~QString, Tree*~
-        +clear() void
-    }
-
-    class Parser_JSON {
-        -TreeManager* treeManager_
-        -bool has_error_
-        -bool has_memory_leak_
-        -int current_position_
-        -int memory_var_index_
-        -size_t max_bytes_count_
-        +Parser_JSON()
-        +~Parser_JSON()
-        +parseJsonFile(QString file_path) bool
-        +getTreeManager() TreeManager*
-        +hasError() bool
-        +hasMemoryLeak() bool
-        +printElements() void
-        +printCNFAsVectors() void
-        +solveCNF(Tree* tree) bool
-        -processBody(QJsonValue body_value, Tree* current_tree, int clause_id) void
-        -processBranch(QJsonObject branch_obj, Tree* current_tree, int clause_id) void
-        -processOperation(QJsonObject op_object, Tree* current_tree, int clause_id) void
-        -processLoop(QJsonObject loop_object, Tree* current_tree, int clause_id) void
-        -processStructureField(QJsonValue field_value, Tree* current_tree, QString var_name, int clause_id) void
-        -processNestedValue(QJsonObject value_obj, Tree* current_tree, QString var_name, int clause_id) void
-        -processValueField(QJsonValue field_value, Tree* current_tree, QString last_name, int nesting_level) void
-        -handleMalloc(Tree* current_tree, QString var_name, int clause_id) void
-        -handleFree(Tree* current_tree, QString var_name) void
-        -mergeTrees(Tree* target_tree, Tree* source_tree) void
-        -findLeaves(Tree* tree) QList~QString~
-        -findElementsWithRootConnection(Tree* tree) QList~QString~
-        -findOrCreateElement(Tree* tree, QString name, QString type) TreeElement*
-        -findOrCreateConnection(Tree* tree, QString from, QString to, int position) Connection*
-        -processNestedVariable(QString current_name, QString field_direction) void
-        -navigateByField(Tree* tree, QString current_name, QString field_direction, int clause_id) QString
-        -removeRootLinkClauses(Tree* tree, QString root_name, QString var_name) void
-        -findSetBitPosition(BoolVector bit_vector) size_t
-    }
-
-    %% Relationships
-    BoolVector --* Connection : composition
-    TreeElement --* Tree : composition
-    Connection --* Tree : composition
-    Tree --* TreeManager : composition
-    TreeManager --> Parser_JSON : association
-    TreeElementType ..> TreeElement : enumeration
-    CNFNode ..> BoolVector : friendclassDiagram
-    class BoolVector {
-        -std::vector~uint8_t~ data_
-        -size_t num_bits_
-        -size_t num_bytes_
-        +BoolVector()
-        +BoolVector(size_t bits_count)
-        +~BoolVector()
-        +BoolVector(const BoolVector& other)
-        +operator=(const BoolVector& other) BoolVector&
-        +print() void
-        +getBit(size_t bit_index) bool
-        +getData() const uint8_t*
-        +setBit(size_t bit_index) void
-        +clearBit(size_t bit_index) void
-        +isZero() bool
-        +size() size_t
-        +countBytes() size_t
-        +calculateBytes(size_t bits_count) size_t$
-        +resize(size_t new_bits_count) void
+        -name_ : QString
+        -elements_ : QMap<QString, TreeElement*>
+        -connections_ : QList<Connection>
+        -root_ : TreeElement*
+        --
+        +Tree(name : QString)
+        +getName() : QString
+        +getRoot() : TreeElement*
+        +getElements() : QMap<QString, TreeElement*>
+        +getConnections() : QList<Connection>
+        +addElement(name : QString, element : TreeElement*) : bool
+        +removeElement(name : QString) : bool
+        +findElement(name : QString) : TreeElement*
+        +addConnection(connection : Connection) : void
+        +removeConnection(from : QString, to : QString) : bool
+        +findConnection(from : QString, to : QString) : Connection*
+        +isEmpty() : bool
+        +clear() : void
+        +isValid() : bool
     }
 
     class TreeElement {
-        -QString name_
-        -int type_
-        -int position_
-        +TreeElement()
-        +TreeElement(QString name, int type, int position)
-        +TreeElement(const TreeElement& other)
-        +~TreeElement()
-        +operator=(const TreeElement& other) TreeElement&
-        +operator==(const TreeElement& other) bool
-        +operator!=(const TreeElement& other) bool
-        +getName() QString
-        +getType() int
-        +getPosition() int
-        +getTypeName() QString
-        +setName(QString name) void
-        +setType(int type) void
-        +setPosition(int position) void
-        +isValid() bool
-        +toString() QString
-        +isRoot() bool
-        +isMemory() bool
-        +isLeftVariable() bool
-        +isRightVariable() bool
+        -name_ : QString
+        -type_ : int
+        -position_ : int
+        --
+        +TreeElement(name : QString, type : int, position : int)
+        +getName() : QString
+        +getType() : int
+        +getPosition() : int
+        +getTypeName() : QString
+        +setName(name : QString) : void
+        +setType(type : int) : void
+        +setPosition(position : int) : void
+        +isRoot() : bool
+        +isMemory() : bool
+        +isNull() : bool
+        +isLeftVariable() : bool
+        +isRightVariable() : bool
+        +isValid() : bool
     }
 
-    class TreeElementType {
-        <<enumeration>>
+    enum TreeElementType {
         ROOT
         MEMORY
+        NULL_ELEMENT
         LEFT_VARIABLE
         RIGHT_VARIABLE
+        MAGIC_POINTER
     }
 
     class Connection {
-        -QString from_
-        -QString to_
-        -BoolVector positiveVector_
-        -BoolVector negativeVector_
-        -int position_
-        +Connection()
-        +Connection(QString from, QString to, BoolVector positiveVector, BoolVector negativeVector, int position)
-        +Connection(const Connection& other)
-        +operator=(const Connection& other) Connection&
-        +getFrom() QString
-        +getTo() QString
-        +getPositiveVector() BoolVector
-        +getNegativeVector() BoolVector
-        +getPosition() int
-        +setFrom(QString from) void
-        +setTo(QString to) void
-        +setPositiveVector(BoolVector vector) void
-        +setNegativeVector(BoolVector vector) void
-        +setPosition(int position) void
-        +setPositiveBit(size_t bitIndex) void
-        +clearPositiveBit(size_t bitIndex) void
-        +getPositiveBit(size_t bitIndex) bool
-        +resizePositiveVector(size_t newSize) void
-        +getPositiveVectorSize() size_t
-        +setNegativeBit(size_t bitIndex) void
-        +clearNegativeBit(size_t bitIndex) void
-        +getNegativeBit(size_t bitIndex) bool
-        +resizeNegativeVector(size_t newSize) void
-        +getNegativeVectorSize() size_t
-        +isValid() bool
-        +toString() QString
+        -from_ : QString
+        -to_ : QString
+        -positiveVector_ : BoolVector
+        -negativeVector_ : BoolVector
+        -position_ : int
+        --
+        +Connection(from : QString, to : QString,\n            positiveVector : BoolVector,\n            negativeVector : BoolVector, position : int)
+        +getFrom() : QString
+        +getTo() : QString
+        +getPositiveVector() : BoolVector
+        +getNegativeVector() : BoolVector
+        +getPosition() : int
+        +setPositiveBit(bitIndex : size_t) : void
+        +clearPositiveBit(bitIndex : size_t) : void
+        +getPositiveBit(bitIndex : size_t) : bool
+        +setNegativeBit(bitIndex : size_t) : void
+        +clearNegativeBit(bitIndex : size_t) : void
+        +getNegativeBit(bitIndex : size_t) : bool
+        +isValid() : bool
     }
 
-    class Tree {
-        -QString name_
-        -QList~TreeElement*~ elements_
-        -QList~Connection*~ connections_
-        -Minisat::Solver* solver_
-        -int elementCount_
-        -int connectionCount_
-        +Tree()
-        +Tree(QString name)
-        +~Tree()
-        +Tree(const Tree& other)
-        +operator=(const Tree& other) Tree&
-        +getName() QString
-        +getElements() QList~TreeElement*~
-        +getConnections() QList~Connection*~
-        +getSolver() Minisat::Solver*
-        +getElementCount() int
-        +getConnectionCount() int
-        +setName(QString name) void
-        +addElement(TreeElement* element) void
-        +removeElement(TreeElement* element) void
-        +addConnection(Connection* connection) void
-        +removeConnection(Connection* connection) void
-        +findElement(QString name) TreeElement*
-        +findConnection(QString from, QString to) Connection*
-        +clear() void
-        +isValid() bool
-        +toString() QString
+    class BoolVector {
+        -vector : unsigned char*
+        -bits : size_t
+        -bytes : size_t
+        --
+        +BoolVector()
+        +BoolVector(bits : size_t)
+        +{static} calculateBytes(bits : size_t) : size_t
+        +setBit(position : size_t) : void
+        +clearBit(position : size_t) : void
+        +getBit(position : size_t) : bool
+        +isZero() : bool
+        +size() : size_t
+        +count_bytes() : size_t
+        +resize(newSize : size_t) : void
+        +getVector() : const unsigned char*
+        +print() : void
     }
+}
 
-    class TreeManager {
-        -QMap~QString, Tree*~ trees_
-        -int treeCount_
-        +TreeManager()
-        +~TreeManager()
-        +addTree(QString name, Tree* tree) void
-        +removeTree(QString name) void
-        +getTree(QString name) Tree*
-        +containsTree(QString name) bool
-        +getTreeCount() int
-        +getAllTrees() QMap~QString, Tree*~
-        +clear() void
-    }
+' ─── Relationships ────────────────────────────────────────────────────────────
 
-    class Parser_JSON {
-        -TreeManager* treeManager_
-        -bool has_error_
-        -bool has_memory_leak_
-        -int current_position_
-        -int memory_var_index_
-        -size_t max_bytes_count_
-        +Parser_JSON()
-        +~Parser_JSON()
-        +parseJsonFile(QString file_path) bool
-        +getTreeManager() TreeManager*
-        +hasError() bool
-        +hasMemoryLeak() bool
-        +printElements() void
-        +printCNFAsVectors() void
-        +solveCNF(Tree* tree) bool
-        -processBody(QJsonValue body_value, Tree* current_tree, int clause_id) void
-        -processBranch(QJsonObject branch_obj, Tree* current_tree, int clause_id) void
-        -processOperation(QJsonObject op_object, Tree* current_tree, int clause_id) void
-        -processLoop(QJsonObject loop_object, Tree* current_tree, int clause_id) void
-        -processStructureField(QJsonValue field_value, Tree* current_tree, QString var_name, int clause_id) void
-        -processNestedValue(QJsonObject value_obj, Tree* current_tree, QString var_name, int clause_id) void
-        -processValueField(QJsonValue field_value, Tree* current_tree, QString last_name, int nesting_level) void
-        -handleMalloc(Tree* current_tree, QString var_name, int clause_id) void
-        -handleFree(Tree* current_tree, QString var_name) void
-        -mergeTrees(Tree* target_tree, Tree* source_tree) void
-        -findLeaves(Tree* tree) QList~QString~
-        -findElementsWithRootConnection(Tree* tree) QList~QString~
-        -findOrCreateElement(Tree* tree, QString name, QString type) TreeElement*
-        -findOrCreateConnection(Tree* tree, QString from, QString to, int position) Connection*
-        -processNestedVariable(QString current_name, QString field_direction) void
-        -navigateByField(Tree* tree, QString current_name, QString field_direction, int clause_id) QString
-        -removeRootLinkClauses(Tree* tree, QString root_name, QString var_name) void
-        -findSetBitPosition(BoolVector bit_vector) size_t
-    }
+' implements
+MemoryAnalyzer   ..|> IMemoryAnalyzer
+MinisatSolver    ..|> ISATSolver
+MallocOperation  ..|> IMemoryOperation
+FreeOperation    ..|> IMemoryOperation
+NullOperation    ..|> IMemoryOperation
+SpecialPtrOperation ..|> IMemoryOperation
 
-    %% Relationships
-    BoolVector --* Connection : composition
-    TreeElement --* Tree : composition
-    Connection --* Tree : composition
-    Tree --* TreeManager : composition
-    TreeManager --> Parser_JSON : association
-    TreeElementType ..> TreeElement : enumeration
-    CNFNode ..> BoolVector : friend
+' composition (MemoryAnalyzer owns its collaborators)
+MemoryAnalyzer "1" *-- "1" TreeManager
+MemoryAnalyzer "1" *-- "1" GraphBuilder
+MemoryAnalyzer "1" *-- "1" RowProcessor
+MemoryAnalyzer "1" *-- "1" ISATSolver
+
+' aggregation (MemoryAnalyzer holds references to operation objects)
+MemoryAnalyzer "1" o-- "4" IMemoryOperation
+
+' uses
+GraphBuilder    --> TreeManager   : uses
+RowProcessor    --> TreeManager   : uses
+RowProcessor    --> GraphBuilder  : uses
+RowProcessor    "1" o-- "4" IMemoryOperation : dispatches
+
+' model composition
+TreeManager "1" *-- "0..*" Tree
+Tree        "1" *-- "0..*" TreeElement
+Tree        "1" *-- "0..*" Connection
+Connection  "1" *-- "2"    BoolVector
+
+' enum
+TreeElement ..> TreeElementType : uses
+
+@enduml
